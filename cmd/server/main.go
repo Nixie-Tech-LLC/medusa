@@ -2,9 +2,9 @@ package main
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/Nixie-Tech-LLC/digital-signage-server/internal/api"
-    "github.com/Nixie-Tech-LLC/digital-signage-server/internal/auth"
-    "github.com/Nixie-Tech-LLC/digital-signage-server/internal/db"
+    "github.com/Nixie-Tech-LLC/medusa/internal/api"
+    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
+    "github.com/Nixie-Tech-LLC/medusa/internal/db"
 )
 
 func main() {
