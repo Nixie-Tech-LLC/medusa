@@ -1,31 +1,50 @@
 package main
 
 import (
+    "log"
     "github.com/gin-gonic/gin"
-    "github.com/Nixie-Tech-LLC/medusa/internal/api"
-    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
+    "github.com/Nixie-Tech-LLC/medusa/internal/config"
     "github.com/Nixie-Tech-LLC/medusa/internal/db"
+    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
+    adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
+    tvapi    "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
+
 )
 
 func main() {
-    // 1. Connect to DB
-    if err := db.Init(); err != nil {
+    // Load configuration
+    cfg, err := config.Load()
+    if err != nil {
+        log.Fatalf("failed to load config: %v", err)
+    }
+
+    // Initialize PostgreSQL connection
+    if err := db.Init(cfg.DatabaseURL); err != nil {
         log.Fatalf("db init: %v", err)
     }
 
-    // 2. Set up router
+    // Run pending migrations
+    if err := db.RunMigrations(cfg.MigrationsPath); err != nil {
+        log.Fatalf("db migrate: %v", err)
+    }
+
+    // Set up Gin router
     r := gin.Default()
-    r.Use(auth.JWTMiddleware())
+    r.Use(auth.JWTMiddleware(cfg.JWTSecret))
 
-    // 3. Register endpoints
-    api.RegisterScreenRoutes(r.Group("/api/screens"))
-    api.RegisterContentRoutes(r.Group("/api/content"))
-    api.RegisterScheduleRoutes(r.Group("/api/schedules"))
+    // Admin (webapp) routes
+    admin := r.Group("/api/admin")
+    adminapi.RegisterScreenRoutes(admin)
+    adminapi.RegisterContentRoutes(admin)
+    adminapi.RegisterScheduleRoutes(admin)
 
-    // 4. Start server
-    addr := ":8080"
-    log.Printf("listening on %s", addr)
-    if err := r.Run(addr); err != nil {
+    // TV (device) routes
+    tv := r.Group("/api/tv")
+    tvapi.RegisterScreenRoutes(tv)
+
+    // Start server
+    log.Printf("listening on %s", cfg.ServerAddress)
+    if err := r.Run(cfg.ServerAddress); err != nil {
         log.Fatalf("server error: %v", err)
     }
 }
