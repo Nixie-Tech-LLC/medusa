@@ -1,40 +1,29 @@
 package config
 
 import (
-    "fmt"
     "os"
 )
 
-// Config holds environment-based settings
 type Config struct {
+    ServerAddress  string
     DatabaseURL    string
     MigrationsPath string
     JWTSecret      string
-    ServerAddress  string
 }
 
-// Load reads configuration from environment variables
 func Load() (*Config, error) {
-    dbURL := os.Getenv("DATABASE_URL")
-    if dbURL == "" {
-        return nil, fmt.Errorf("DATABASE_URL is required")
-    }
-    jwt := os.Getenv("JWT_SECRET")
-    if jwt == "" {
-        return nil, fmt.Errorf("JWT_SECRET is required")
-    }
-    addr := os.Getenv("SERVER_ADDRESS")
-    if addr == "" {
-        addr = ":8080"
-    }
-    migrations := os.Getenv("MIGRATIONS_PATH")
-    if migrations == "" {
-        migrations = "./migrations"
-    }
     return &Config{
-        DatabaseURL:    dbURL,
-        MigrationsPath: migrations,
-        JWTSecret:      jwt,
-        ServerAddress:  addr,
+        ServerAddress:  getEnv("SERVER_ADDRESS", ":9000"),
+        DatabaseURL:    getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/medusa?sslmode=disable"),
+        MigrationsPath: getEnv("MIGRATIONS_PATH", "./migrations"),
+        JWTSecret:      getEnv("JWT_SECRET", "replace_me_with_strong_secret"),
     }, nil
 }
+
+func getEnv(key, fallback string) string {
+    if v := os.Getenv(key); v != "" {
+        return v
+    }
+    return fallback
+}
+

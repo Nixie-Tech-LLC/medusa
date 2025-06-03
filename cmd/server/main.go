@@ -8,41 +8,45 @@ import (
     "github.com/Nixie-Tech-LLC/medusa/internal/auth"
     adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
     tvapi    "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
-
 )
 
 func main() {
-    // Load configuration
+    // load configuration
     cfg, err := config.Load()
     if err != nil {
         log.Fatalf("failed to load config: %v", err)
     }
 
-    // Initialize PostgreSQL connection
+    // initialize PostgreSQL
     if err := db.Init(cfg.DatabaseURL); err != nil {
         log.Fatalf("db init: %v", err)
     }
 
-    // Run pending migrations
+    // run pending migrations
     if err := db.RunMigrations(cfg.MigrationsPath); err != nil {
         log.Fatalf("db migrate: %v", err)
     }
 
-    // Set up Gin router
+    // set up gin router
     r := gin.Default()
-    r.Use(auth.JWTMiddleware(cfg.JWTSecret))
 
-    // Admin (webapp) routes
+    // register auth (public) routes first:
     admin := r.Group("/api/admin")
+    // pass JWTSecret so auth handlers can issue tokens
+    adminapi.RegisterAuthRoutes(admin, cfg.JWTSecret)
+
+    // apply JWTMiddleware for all the admin routes that follow
+    admin.Use(auth.JWTMiddleware(cfg.JWTSecret))
     adminapi.RegisterScreenRoutes(admin)
     adminapi.RegisterContentRoutes(admin)
     adminapi.RegisterScheduleRoutes(admin)
 
-    // TV (device) routes
+    // TV routes remain as before (they’ll also see the JWTMiddleware)
     tv := r.Group("/api/tv")
+    tv.Use(auth.JWTMiddleware(cfg.JWTSecret))
     tvapi.RegisterScreenRoutes(tv)
 
-    // Start server
+    // start
     log.Printf("listening on %s", cfg.ServerAddress)
     if err := r.Run(cfg.ServerAddress); err != nil {
         log.Fatalf("server error: %v", err)
