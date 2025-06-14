@@ -1,7 +1,11 @@
 CREATE TABLE IF NOT EXISTS screens (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  location TEXT
+  location TEXT,
+  paired BOOLEAN NOT NULL DEFAULT false,
+  pairing_code TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS schedules (
@@ -20,3 +24,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS screen_assignments (
+  screen_id INT REFERENCES screens(id),
+  user_id INT REFERENCES users(id),
+  PRIMARY KEY (screen_id, user_id)
+);
+

@@ -140,32 +140,57 @@ func UpdateUserProfile(id int, email string, name *string) error {
 
 
 func GetScreenByID(id int) (model.Screen, error) {
-    // TODO: query your screens table and scan into []model.Screen
-	return model.Screen{}, nil
+	var screen model.Screen
+	err := DB.Get(&screen, `
+		SELECT id, name, location, paired, pairing_code, created_at, updated_at
+		FROM screens
+		WHERE id = $1
+	`, id)
+	return screen, err
 }
 
 func ListScreens() ([]model.Screen, error) {
-    // TODO: INSERT ... RETURNING * into model.Screen
-	return nil, nil
+	var screens []model.Screen
+	err := DB.Select(&screens, `
+		SELECT id, name, location, paired, pairing_code, created_at, updated_at
+		FROM screens
+		ORDER BY id
+	`)
+	return screens, err
 }
 
 func CreateScreen(name string, location *string) (model.Screen, error) {
-    // TODO: SELECT ... FROM screens WHERE id=$1
-	return model.Screen{}, nil
+	var screen model.Screen
+	err := DB.Get(&screen, `
+		INSERT INTO screens (name, location)
+		VALUES ($1, $2)
+		RETURNING id, name, location, paired, pairing_code, created_at, updated_at
+	`, name, location)
+	return screen, err
 }
 
 func UpdateScreen(id int, name, location *string) error {
-    // TODO: update screens SET name=$2, location=$3, updated_at=now() WHERE id=$1
-	return nil
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET name = COALESCE($2, name),
+		    location = COALESCE($3, location),
+		    updated_at = now()
+		WHERE id = $1
+	`, id, name, location)
+	return err
 }
 
 func DeleteScreen(id int) error {
-    // TODO: DELETE FROM screens WHERE id=$1
-	return nil
+	_, err := DB.Exec(`DELETE FROM screens WHERE id = $1`, id)
+	return err
 }
 
 func AssignScreenToUser(screenID, userID int) error {
-	// TODO: INSERT INTO screen_assignments(screen_id, user_id) VALUES... 
-	return nil
+	_, err := DB.Exec(`
+		INSERT INTO screen_assignments (screen_id, user_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, screenID, userID)
+	return err
 }
 
