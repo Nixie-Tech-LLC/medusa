@@ -31,7 +31,7 @@ func main() {
     // set up gin router
     r := gin.Default()
 
-	store := db.NewStoreFromDB(db.DB)
+	store := db.NewStore()
     // register auth (public) routes first:
     admin := r.Group("/api/admin")
 
@@ -41,7 +41,6 @@ func main() {
 	protected := admin.Group("/")
 	protected.Use(auth.JWTMiddleware(cfg.JWTSecret))
     // apply JWTMiddleware for all the admin routes that follow
-    adminapi.RegisterScreenRoutes(protected)
     adminapi.RegisterContentRoutes(protected)
     adminapi.RegisterScheduleRoutes(protected)
 
