@@ -42,52 +42,15 @@ func accountManagementController(secret string, store db.Store) *AccountManager 
 }
 
 // mounts auth‐related routes under /api/admin/auth
-func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string) {
-    r.POST("/auth/signup", userSignup)
-    r.POST("/auth/login", userLogin)
-    r.GET("/profile", )
-
-    // protected: update my profile (only name/email for now)
-    r.PUT("/profile", func(c *gin.Context) {
-        currentUser, ok := auth.GetCurrentUser(c)
-        if !ok {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
-            return
-        }
-        var req struct {
-            Email string  `json:"email" binding:"required,email"`
-            Name  *string `json:"name"`
-        }
-        if err := c.ShouldBindJSON(&req); err != nil {
-            c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-            return
-        }
-        // If they’re changing their email, ensure the new one isn’t taken
-        if req.Email != currentUser.Email {
-            if other, _ := db.GetUserByEmail(req.Email); other != nil {
-                c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
-                return
-            }
-        }
-        if err := db.UpdateUserProfile(currentUser.ID, req.Email, req.Name); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update profile"})
-            return
-        }
-        updated, err := db.GetUserByID(currentUser.ID)
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch updated profile"})
-            return
-        }
-        c.JSON(http.StatusOK, profileResponse{
-            ID:        updated.ID,
-            Email:     updated.Email,
-            Name:      updated.Name,
-            CreatedAt: updated.CreatedAt.Format(time.RFC3339),
-            UpdatedAt: updated.UpdatedAt.Format(time.RFC3339),
-        })
-    })
+func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
+	ctl := accountManagementController(jwtSecret, store)
+    r.POST("/auth/signup", ctl.userSignup)
+    r.POST("/auth/login", ctl.userLogin)
+    r.GET("/auth/current_profile", ctl.getCurrentProfile)
+	r.PATCH("/auth/current_profile", ctl.updateCurrentProfile)
 }
 
+// POST /api/admin/auth/signup
 func (a *AccountManager) userSignup(c *gin.Context) {
     var req signupRequest
     if err := c.ShouldBindJSON(&req); err != nil {
@@ -119,6 +82,7 @@ func (a *AccountManager) userSignup(c *gin.Context) {
     c.JSON(http.StatusCreated, gin.H{"token": token})
 }
 
+// POST /api/admin/auth/login
 func (a *AccountManager) userLogin(c *gin.Context) {
     var req loginRequest
     if err := c.ShouldBindJSON(&req); err != nil {
@@ -143,18 +107,59 @@ func (a *AccountManager) userLogin(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
+// GET /api/admin/auth/current_profile
+func (a *AccountManager) getCurrentProfile(c *gin.Context) {
+    currentUser, ok := auth.GetCurrentUser(c)
+    if !ok {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
+        return
+    }
+    c.JSON(http.StatusOK, profileResponse{
+        ID:        currentUser.ID,
+        Email:     currentUser.Email,
+        Name:      currentUser.Name,
+        CreatedAt: currentUser.CreatedAt.Format(time.RFC3339),
+        UpdatedAt: currentUser.UpdatedAt.Format(time.RFC3339),
+    })
+}
 
-func getProfile(c *gin.Context) {
-        currentUser, ok := auth.GetCurrentUser(c)
-        if !ok {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
+// PATCH /api/admin/auth/current_profile
+func (a *AccountManager) updateCurrentProfile(c *gin.Context) {
+    currentUser, ok := auth.GetCurrentUser(c)
+    if !ok {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
+        return
+    }
+    var req struct {
+        Email string  `json:"email" binding:"required,email"`
+        Name  *string `json:"name"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    // If they’re changing their email, ensure the new one isn’t taken
+    if req.Email != currentUser.Email {
+        if other, _ := db.GetUserByEmail(req.Email); other != nil {
+            c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
             return
         }
-        c.JSON(http.StatusOK, profileResponse{
-            ID:        currentUser.ID,
-            Email:     currentUser.Email,
-            Name:      currentUser.Name,
-            CreatedAt: currentUser.CreatedAt.Format(time.RFC3339),
-            UpdatedAt: currentUser.UpdatedAt.Format(time.RFC3339),
-        })
     }
+    if err := db.UpdateUserProfile(currentUser.ID, req.Email, req.Name); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update profile"})
+        return
+    }
+    updated, err := db.GetUserByID(currentUser.ID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch updated profile"})
+        return
+    }
+    c.JSON(http.StatusOK, profileResponse{
+        ID:        updated.ID,
+        Email:     updated.Email,
+        Name:      updated.Name,
+        CreatedAt: updated.CreatedAt.Format(time.RFC3339),
+        UpdatedAt: updated.UpdatedAt.Format(time.RFC3339),
+    })
+}
+

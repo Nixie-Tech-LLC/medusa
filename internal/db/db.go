@@ -64,7 +64,7 @@ func RunMigrations(migrationsPath string) error {
 }
 
 // inserts new user into table, returns new user ID.
-func (s *pgStore) CreateUser(email, hashedPassword string, name *string) (int, error) {
+func CreateUser(email, hashedPassword string, name *string) (int, error) {
     query := `
     INSERT INTO users (email, hashed_password, name, created_at, updated_at)
     VALUES ($1, $2, $3, now(), now())
@@ -79,7 +79,7 @@ func (s *pgStore) CreateUser(email, hashedPassword string, name *string) (int, e
 }
 
 // fetches user by email. returns nil, sql.ErrNoRows if not found.
-func (s *pgStore) GetUserByEmail(email string) (*model.User, error) {
+func GetUserByEmail(email string) (*model.User, error) {
     var u model.User
     query := `
     SELECT id, email, hashed_password, name, created_at, updated_at
@@ -97,7 +97,7 @@ func (s *pgStore) GetUserByEmail(email string) (*model.User, error) {
 }
 
 // fetches a user by ID. Returns nil, sql.ErrNoRows if not found.
-func (s *pgStore) GetUserByID(id int) (*model.User, error) {
+func GetUserByID(id int) (*model.User, error) {
     var u model.User
     query := `
     SELECT id, email, hashed_password, name, created_at, updated_at
@@ -116,7 +116,7 @@ func (s *pgStore) GetUserByID(id int) (*model.User, error) {
 
 // updates a user's email and name, and bumps updated_at.
 // returns an error if no rows were affected (e.g. user ID doesn’t exist).
-func (s *pgStore) UpdateUserProfile(id int, email string, name *string) error {
+func UpdateUserProfile(id int, email string, name *string) error {
     query := `
     UPDATE users
     SET email = $2,
@@ -139,9 +139,33 @@ func (s *pgStore) UpdateUserProfile(id int, email string, name *string) error {
 }
 
 
-func (s *pgStore) GetScreenByID(id int) (model.Screen, error) {
+func GetScreenByID(id int) (model.Screen, error) {
+    // TODO: query your screens table and scan into []model.Screen
+	return model.Screen{}, nil
 }
 
-func (s *pgStore) ListScreens() {
-
+func ListScreens() ([]model.Screen, error) {
+    // TODO: INSERT ... RETURNING * into model.Screen
+	return nil, nil
 }
+
+func CreateScreen(name string, location *string) (model.Screen, error) {
+    // TODO: SELECT ... FROM screens WHERE id=$1
+	return model.Screen{}, nil
+}
+
+func UpdateScreen(id int, name, location *string) error {
+    // TODO: update screens SET name=$2, location=$3, updated_at=now() WHERE id=$1
+	return nil
+}
+
+func DeleteScreen(id int) error {
+    // TODO: DELETE FROM screens WHERE id=$1
+	return nil
+}
+
+func AssignScreenToUser(screenID, userID int) error {
+	// TODO: INSERT INTO screen_assignments(screen_id, user_id) VALUES... 
+	return nil
+}
+
