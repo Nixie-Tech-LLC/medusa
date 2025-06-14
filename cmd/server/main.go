@@ -1,58 +1,64 @@
 package main
 
 import (
-    "log"
-    "github.com/gin-gonic/gin"
-    "github.com/Nixie-Tech-LLC/medusa/internal/config"
-    "github.com/Nixie-Tech-LLC/medusa/internal/db"
-    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
-    adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
-    tvapi    "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
+	"log"
+	"os"
+
+	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
+	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
+	"github.com/Nixie-Tech-LLC/medusa/internal/auth"
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-    // load configuration
-    cfg, err := config.Load()
+	// load configuration only if not running app locally
+	if os.Getenv("APP_ENV") != "local" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatalf("failed to load config: %v", err)
+		}
+	}
 
-    if err != nil {
-        log.Fatalf("failed to load config: %v", err)
-    }
+	databaseUrl := os.Getenv("DATABASE_URL")
+	secretKey := os.Getenv("JWT_SECRET")
+	serverAddress := os.Getenv("SERVER_ADDRESS")
+	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 
-    // initialize PostgreSQL
-    if err := db.Init(cfg.DatabaseURL); err != nil {
-        log.Fatalf("db init: %v", err)
-    }
+	// initialize PostgreSQL
+	if err := db.Init(databaseUrl); err != nil {
+		log.Fatalf("db init: %v", err)
+	}
 
-    // run pending migrations
-    if err := db.RunMigrations(cfg.MigrationsPath); err != nil {
-        log.Fatalf("db migrate: %v", err)
-    }
+	// run pending migrations
+	if err := db.RunMigrations(migrationsPath); err != nil {
+		log.Fatalf("db migrate: %v", err)
+	}
 
-    // set up gin router
-    r := gin.Default()
+	// set up gin router
+	r := gin.Default()
 
 	store := db.NewStore()
-    // register auth (public) routes first:
-    admin := r.Group("/api/admin")
+	// register auth (public) routes first:
+	admin := r.Group("/api/admin")
 
-    // pass JWTSecret so auth handlers can issue tokens
-    adminapi.RegisterAuthRoutes(admin, cfg.JWTSecret, store)
+	// pass JWTSecret so auth handlers can issue tokens
+	adminapi.RegisterAuthRoutes(admin, secretKey, store)
 
 	protected := admin.Group("/")
-	protected.Use(auth.JWTMiddleware(cfg.JWTSecret))
-    // apply JWTMiddleware for all the admin routes that follow
-    adminapi.RegisterContentRoutes(protected)
-    adminapi.RegisterScheduleRoutes(protected)
+	protected.Use(auth.JWTMiddleware(secretKey))
+	// apply JWTMiddleware for all the admin routes that follow
+	adminapi.RegisterContentRoutes(protected)
+	adminapi.RegisterScheduleRoutes(protected)
 
+	tv := r.Group("/api/tv")
+	tv.Use(auth.JWTMiddleware(secretKey))
+	tvapi.RegisterScreenRoutes(tv)
 
-    tv := r.Group("/api/tv")
-    tv.Use(auth.JWTMiddleware(cfg.JWTSecret))
-    tvapi.RegisterScreenRoutes(tv)
-
-    // start
-    log.Printf("listening on %s", cfg.ServerAddress)
-    if err := r.Run(cfg.ServerAddress); err != nil {
-        log.Fatalf("server error: %v", err)
-    }
+	// start
+	log.Printf("listening on %s", serverAddress)
+	if err := r.Run(serverAddress); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
 }
-

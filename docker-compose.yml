@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:13
     container_name: medusa-db
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: medusa_user
       POSTGRES_PASSWORD: mysecretpassword
@@ -10,26 +10,20 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
 
   medusa:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medusa
-    restart: on-failure
-    env_file: .env
+    container_name: medusa-app
+    env_file: MEDUSA_LOCAL.env
     depends_on:
       - db
     ports:
       - "8080:8080"
-    networks:
-      - medusa-net
 
 volumes:
-  db_data:
-
-networks:
-  medusa-net:
-    driver: bridge
+  pgdata:
+    driver: local
 
