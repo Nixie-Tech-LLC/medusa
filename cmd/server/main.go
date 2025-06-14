@@ -1,31 +1,57 @@
 package main
 
 import (
+    "log"
     "github.com/gin-gonic/gin"
-    "github.com/Nixie-Tech-LLC/medusa/internal/api"
-    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
+    "github.com/Nixie-Tech-LLC/medusa/internal/config"
     "github.com/Nixie-Tech-LLC/medusa/internal/db"
+    "github.com/Nixie-Tech-LLC/medusa/internal/auth"
+    adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
+    tvapi    "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
 )
 
 func main() {
-    // 1. Connect to DB
-    if err := db.Init(); err != nil {
+    // load configuration
+    cfg, err := config.Load()
+
+    if err != nil {
+        log.Fatalf("failed to load config: %v", err)
+    }
+
+    // initialize PostgreSQL
+    if err := db.Init(cfg.DatabaseURL); err != nil {
         log.Fatalf("db init: %v", err)
     }
 
-    // 2. Set up router
+    // run pending migrations
+    if err := db.RunMigrations(cfg.MigrationsPath); err != nil {
+        log.Fatalf("db migrate: %v", err)
+    }
+
+    // set up gin router
     r := gin.Default()
-    r.Use(auth.JWTMiddleware())
 
-    // 3. Register endpoints
-    api.RegisterScreenRoutes(r.Group("/api/screens"))
-    api.RegisterContentRoutes(r.Group("/api/content"))
-    api.RegisterScheduleRoutes(r.Group("/api/schedules"))
+	store := db.NewStore()
+    // register auth (public) routes first:
+    admin := r.Group("/api/admin")
 
-    // 4. Start server
-    addr := ":8080"
-    log.Printf("listening on %s", addr)
-    if err := r.Run(addr); err != nil {
+    // pass JWTSecret so auth handlers can issue tokens
+    adminapi.RegisterAuthRoutes(admin, cfg.JWTSecret, store)
+
+	protected := admin.Group("/")
+	protected.Use(auth.JWTMiddleware(cfg.JWTSecret))
+    // apply JWTMiddleware for all the admin routes that follow
+    adminapi.RegisterContentRoutes(protected)
+    adminapi.RegisterScheduleRoutes(protected)
+
+
+    tv := r.Group("/api/tv")
+    tv.Use(auth.JWTMiddleware(cfg.JWTSecret))
+    tvapi.RegisterScreenRoutes(tv)
+
+    // start
+    log.Printf("listening on %s", cfg.ServerAddress)
+    if err := r.Run(cfg.ServerAddress); err != nil {
         log.Fatalf("server error: %v", err)
     }
 }
