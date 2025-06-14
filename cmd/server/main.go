@@ -13,6 +13,7 @@ import (
 func main() {
     // load configuration
     cfg, err := config.Load()
+
     if err != nil {
         log.Fatalf("failed to load config: %v", err)
     }
@@ -30,19 +31,21 @@ func main() {
     // set up gin router
     r := gin.Default()
 
+	store := db.NewStoreFromDB(db.DB)
     // register auth (public) routes first:
     admin := r.Group("/api/admin")
+
     // pass JWTSecret so auth handlers can issue tokens
-    adminapi.RegisterAuthRoutes(admin, cfg.JWTSecret)
+    adminapi.RegisterAuthRoutes(admin, cfg.JWTSecret, store)
 
+	protected := admin.Group("/")
+	protected.Use(auth.JWTMiddleware(cfg.JWTSecret))
     // apply JWTMiddleware for all the admin routes that follow
-	// commented out for testing (no headers)
-    // admin.Use(auth.JWTMiddleware(cfg.JWTSecret))
-    adminapi.RegisterScreenRoutes(admin)
-    adminapi.RegisterContentRoutes(admin)
-    adminapi.RegisterScheduleRoutes(admin)
+    adminapi.RegisterScreenRoutes(protected)
+    adminapi.RegisterContentRoutes(protected)
+    adminapi.RegisterScheduleRoutes(protected)
 
-    // TV routes remain as before (they’ll also see the JWTMiddleware)
+
     tv := r.Group("/api/tv")
     tv.Use(auth.JWTMiddleware(cfg.JWTSecret))
     tvapi.RegisterScreenRoutes(tv)

@@ -40,7 +40,7 @@ func GenerateJWT(userID int, secret string) (string, error) {
 
 // verifies the JWT and returns the user ID (unexported, only used internally).
 func parseToken(tokenString, secret string) (int, error) {
-    token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+    token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
         if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, errors.New("unexpected signing method")
         }
@@ -68,16 +68,19 @@ func JWTMiddleware(secret string) gin.HandlerFunc {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing auth header"})
             return
         }
+
         parts := strings.SplitN(header, " ", 2)
         if len(parts) != 2 || parts[0] != "Bearer" {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid auth header"})
             return
         }
+
         userID, err := parseToken(parts[1], secret)
         if err != nil {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
             return
         }
+
         user, err := db.GetUserByID(userID)
         if err != nil {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})

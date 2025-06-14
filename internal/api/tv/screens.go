@@ -9,7 +9,6 @@ import (
 
     "github.com/Nixie-Tech-LLC/medusa/internal/auth"
     "github.com/Nixie-Tech-LLC/medusa/internal/db"
-    "github.com/Nixie-Tech-LLC/medusa/internal/model"
 )
 
 type createScreenRequest struct {
@@ -37,7 +36,7 @@ type screenResponse struct {
     UpdatedAt   string  `json:"updated_at"`
 }
 
-func RegisterScreensRoutes(r gin.IRoutes) {
+func RegisterScreenRoutes(r gin.IRoutes) {
     // all admin screens routes require a valid admin JWT
     r.GET("/screens", listScreens)
     r.POST("/screens", createScreen)
