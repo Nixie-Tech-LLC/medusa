@@ -1,3 +1,4 @@
 DROP TABLE IF EXISTS schedules;
 DROP TABLE IF EXISTS screens;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS screen_assignments;

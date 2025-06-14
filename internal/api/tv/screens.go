@@ -3,6 +3,7 @@ package admin
 import (
     "net/http"
     "strconv"
+	"fmt"
     "time"
 
     "github.com/gin-gonic/gin"
@@ -31,7 +32,7 @@ type screenResponse struct {
     Name        string  `json:"name"`
     Location    *string `json:"location"`
     Paired      bool    `json:"paired"`
-    PairingCode string  `json:"pairing_code,omitempty"`
+    PairingCode *string `json:"pairing_code,omitempty"`
     CreatedAt   string  `json:"created_at"`
     UpdatedAt   string  `json:"updated_at"`
 }
@@ -91,6 +92,7 @@ func createScreen(c *gin.Context) {
 
     screen, err := db.CreateScreen(req.Name, req.Location)
     if err != nil {
+    	fmt.Println("CreateScreen error:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create screen"})
         return
     }
