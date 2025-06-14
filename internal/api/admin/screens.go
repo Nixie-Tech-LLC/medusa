@@ -7,4 +7,3 @@ func RegisterScreenRoutes(r gin.IRoutes) {
         c.JSON(200, gin.H{"message": "admin screens placeholder"})
     })
 }
-

@@ -1,6 +1,59 @@
 The server side of the digital signage software
 
-### 1. Prerequisites
+### 1. Project Layout
+```
+.
+├── Dockerfile
+├── Makefile
+├── README.md
+├── docker-compose.yml
+├── go.mod
+├── go.sum
+│   
+├── cmd
+│   └── server
+│       └── main.go
+├── internal
+│   ├── api
+│   │   ├── admin
+│   │   │   ├── auth.go
+│   │   │   ├── content.go
+│   │   │   ├── schedules.go
+│   │   │   └── screens.go
+│   │   └── tv
+│   │       └── screens.go
+│   ├── auth
+│   │   └── auth.go
+│   ├── config
+│   │   └── config.go
+│   ├── db
+│   │   ├── db.go
+│   │   └── store.go
+│   └── model
+│       ├── screen.go
+│       └── user.go
+└── migrations
+    ├── _init.down.sql
+    └── _init.up.sql
+```
+
+`cmd/server/main.go` is the entry point of the server implementation. 
+
+All software implementation is contained in the `internal` directory.
+
+The API endpoints are in the `api/` directory, with `api/admin/` corresponding to accounts/webapp endpoints and `api/tv/` corresponding to the TV client side endpoints.
+
+The `model/` directory defines the global `struct` definitions used throughout the application. Refer to the implementations in these files to add definitions in the future. 
+This is where things like `schedules`, `canvasses`, `groups`, etc. would be defined when they are implemented.
+
+The `db/` directory is for postgres API implemention, it exposes an internal API for the rest of the application to use. Each database interaction is facilitated by the `db` package. 
+`store.go` defines what a database store implementation must follow, so whenever a function is added to `db.go`, its declaration must be in the `Store` interface.
+
+The `auth/` directory is for auth helpers at the moment, I might restructure it into a `utils` or `helpers` directory later if more instances pop up.
+
+The `config/` directory is for runtime environment variable implementation and runtime configuration.
+
+### 2. Prerequisites
 
 - **Go 1.24+**  
 - **PostgreSQL 13+** (client & server)  
