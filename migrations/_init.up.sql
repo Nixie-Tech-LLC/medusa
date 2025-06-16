@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS screens (
   name TEXT NOT NULL,
   location TEXT,
   paired BOOLEAN NOT NULL DEFAULT false,
-  pairing_code TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP NOT NULL DEFAULT now()
 );

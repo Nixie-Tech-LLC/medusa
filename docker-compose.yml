@@ -1,7 +1,7 @@
 services:
-  db:
+  postgres:
     image: postgres:13
-    container_name: medusa-db
+    container_name: medusa-postgres
     restart: always
     environment:
       POSTGRES_USER: medusa_user
@@ -11,6 +11,17 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    
+  redis:
+    image: redis:8.0
+    container_name: medusa-redis
+    restart: always
+    environment:
+      REDIS_PASSWORD: mysecretpassword
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   medusa:
     build:
@@ -19,11 +30,13 @@ services:
     container_name: medusa-app
     env_file: MEDUSA_LOCAL.env
     depends_on:
-      - db
+      - postgres
+      - redis
     ports:
       - "8080:8080"
 
 volumes:
   pgdata:
-    driver: local
+  redis_data:
+  air-cache:
 

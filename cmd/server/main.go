@@ -5,9 +5,11 @@ import (
 	"os"
 
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
+	pairingapi "github.com/Nixie-Tech-LLC/medusa/internal/api/pairing"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
 	"github.com/Nixie-Tech-LLC/medusa/internal/auth"
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -40,6 +42,7 @@ func main() {
 	r := gin.Default()
 
 	store := db.NewStore()
+	redisclient.InitRedis()
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 
@@ -55,6 +58,9 @@ func main() {
 	tv := r.Group("/api/tv")
 	tv.Use(auth.JWTMiddleware(secretKey))
 	tvapi.RegisterScreenRoutes(tv, store)
+
+	pairing := r.Group("/api/pairing")
+	pairingapi.RegisterPairingRoutes(pairing)
 
 	// start
 	log.Printf("listening on %s", serverAddress)
