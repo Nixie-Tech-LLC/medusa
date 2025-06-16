@@ -49,12 +49,12 @@ func main() {
 	protected := admin.Group("/")
 	protected.Use(auth.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
-	adminapi.RegisterContentRoutes(protected)
+	adminapi.RegisterContentRoutes(protected, store)
 	adminapi.RegisterScheduleRoutes(protected)
 
 	tv := r.Group("/api/tv")
 	tv.Use(auth.JWTMiddleware(secretKey))
-	tvapi.RegisterScreenRoutes(tv)
+	tvapi.RegisterScreenRoutes(tv, store)
 
 	// start
 	log.Printf("listening on %s", serverAddress)

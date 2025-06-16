@@ -194,3 +194,67 @@ func AssignScreenToUser(screenID, userID int) error {
 	return err
 }
 
+
+// CreateContent inserts into content, returning the new row.
+func CreateContent(name, ctype, url string) (model.Content, error) {
+    var c model.Content
+    query := `
+    INSERT INTO content (name, type, url, created_at)
+    VALUES ($1, $2, $3, now())
+    RETURNING id, name, type, url, created_at;
+    `
+    if err := DB.Get(&c, query, name, ctype, url); err != nil {
+        return model.Content{}, err
+    }
+    return c, nil
+}
+
+func GetContentByID(id int) (*model.Content, error) {
+    var c model.Content
+    err := DB.Get(&c, `
+        SELECT id, name, type, url, created_at
+        FROM content
+        WHERE id = $1
+    `, id)
+    if errors.Is(err, sql.ErrNoRows) {
+        return nil, sql.ErrNoRows
+    }
+    return &c, err
+}
+
+func ListContent() ([]model.Content, error) {
+    var all []model.Content
+    err := DB.Select(&all, `
+        SELECT id, name, type, url, created_at
+        FROM content
+        ORDER BY id;
+    `)
+    return all, err
+}
+
+func AssignContentToScreen(screenID, contentID int) error {
+    // upsert into screen_contents
+    _, err := DB.Exec(`
+        INSERT INTO screen_contents (screen_id, content_id, assigned_at)
+        VALUES ($1, $2, now())
+        ON CONFLICT (screen_id)
+        DO UPDATE SET content_id = EXCLUDED.content_id,
+                      assigned_at = EXCLUDED.assigned_at;
+    `, screenID, contentID)
+    return err
+}
+
+func GetContentForScreen(screenID int) (*model.Content, error) {
+    var c model.Content
+    err := DB.Get(&c, `
+        SELECT c.id, c.name, c.type, c.url, c.created_at
+        FROM content c
+        JOIN screen_contents sc ON sc.content_id = c.id
+        WHERE sc.screen_id = $1
+    `, screenID)
+    if errors.Is(err, sql.ErrNoRows) {
+        return nil, sql.ErrNoRows
+    }
+    return &c, err
+}
+
