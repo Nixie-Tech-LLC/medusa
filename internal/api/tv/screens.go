@@ -37,20 +37,40 @@ type screenResponse struct {
     UpdatedAt   string  `json:"updated_at"`
 }
 
-func RegisterScreenRoutes(r gin.IRoutes) {
+type contentResponse struct {
+    ID        int    `json:"id"`
+    Name      string `json:"name"`
+    Type      string `json:"type"`
+    URL       string `json:"url"`
+    CreatedAt string `json:"created_at"`
+}
+
+type TvController struct {
+    store db.Store
+}
+
+func NewTvController(store db.Store) *TvController {
+    return &TvController{store: store}
+}
+
+
+func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
+	ctl := NewTvController(store)
     // all admin screens routes require a valid admin JWT
-    r.GET("/screens", listScreens)
-    r.POST("/screens", createScreen)
-    r.GET("/screens/:id", getScreen)
-    r.PUT("/screens/:id", updateScreen)
-    r.DELETE("/screens/:id", deleteScreen)
+    r.GET("/screens", ctl.listScreens)
+    r.POST("/screens", ctl.createScreen)
+    r.GET("/screens/:id", ctl.getScreen)
+    r.PUT("/screens/:id", ctl.updateScreen)
+    r.DELETE("/screens/:id", ctl.deleteScreen)
+    r.GET("/screens/:id/content", ctl.getContentForScreen)
+	r.POST("/screens/:id/content", ctl.assignContentToScreen)
 
     // assignment
-    r.POST("/screens/:id/assign", assignScreenToUser)
+    r.POST("/screens/:id/assign", ctl.assignScreenToUser)
 }
 
 // GET /api/admin/screens
-func listScreens(c *gin.Context) {
+func (t *TvController) listScreens(c *gin.Context) {
     _ , ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -77,7 +97,7 @@ func listScreens(c *gin.Context) {
 }
 
 // POST /api/admin/screens
-func createScreen(c *gin.Context) {
+func (t *TvController) createScreen(c *gin.Context) {
     _, ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -109,7 +129,7 @@ func createScreen(c *gin.Context) {
 }
 
 // GET /api/admin/screens/:id
-func getScreen(c *gin.Context) {
+func (t *TvController) getScreen(c *gin.Context) {
     _, ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -133,7 +153,7 @@ func getScreen(c *gin.Context) {
 }
 
 // PUT /api/admin/screens/:id
-func updateScreen(c *gin.Context) {
+func (t *TvController) updateScreen(c *gin.Context) {
     _, ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -162,7 +182,7 @@ func updateScreen(c *gin.Context) {
 }
 
 // DELETE /api/admin/screens/:id
-func deleteScreen(c *gin.Context) {
+func (t *TvController) deleteScreen(c *gin.Context) {
     _, ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -177,7 +197,7 @@ func deleteScreen(c *gin.Context) {
 }
 
 // POST /api/admin/screens/:id/assign
-func assignScreenToUser(c *gin.Context) {
+func (t *TvController) assignScreenToUser(c *gin.Context) {
     _, ok := auth.GetCurrentUser(c)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -196,4 +216,54 @@ func assignScreenToUser(c *gin.Context) {
     c.Status(http.StatusOK)
 }
 
+func (t *TvController) getContentForScreen(ctx *gin.Context) {
+    screenID, _ := strconv.Atoi(ctx.Param("id"))
+    c, err := t.store.GetContentForScreen(screenID)
+    if err != nil {
+        ctx.JSON(http.StatusNotFound, gin.H{"error": "no content assigned"})
+        return
+    }
+    ctx.JSON(http.StatusOK, contentResponse{
+        ID:        c.ID,
+        Name:      c.Name,
+        Type:      c.Type,
+        URL:       c.URL,
+        CreatedAt: c.CreatedAt.Format(time.RFC3339),
+    })
+}
+
+func (t *TvController) assignContentToScreen(c *gin.Context) {
+    if _, ok := auth.GetCurrentUser(c); !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    screenID, _ := strconv.Atoi(c.Param("id"))
+
+    var req struct {
+        ContentID int `json:"content_id" binding:"required"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    if err := db.AssignContentToScreen(screenID, req.ContentID); err != nil {
+  		fmt.Printf("AssignContentToScreen error: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    // fire-and-forget the TV signal, same as in createContent:
+    go func() {
+        screen, err := db.GetScreenByID(screenID)
+        if err != nil || screen.Location == nil {
+            return
+        }
+        signalURL := fmt.Sprintf("%s/update", *screen.Location)
+        http.Get(signalURL)
+    }()
+
+    c.Status(http.StatusOK)
+}
 

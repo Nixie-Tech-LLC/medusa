@@ -48,7 +48,7 @@ func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
     r.POST("/auth/signup", ctl.userSignup)
 	r.POST("/auth/login", ctl.userLogin)
     r.GET("/auth/current_profile", ctl.getCurrentProfile)
-	r.PATCH("/auth/current_profile", ctl.updateCurrentProfile)
+	r.PUT("/auth/current_profile", ctl.updateCurrentProfile)
 }
 
 // POST /api/admin/auth/signup

@@ -20,6 +20,13 @@ type Store interface {
 	UpdateScreen(id int, name, location *string) error 
 	DeleteScreen(id int) error 
 	AssignScreenToUser(screenID, userID int) error 
+
+	// content functions
+	CreateContent(name, ctype, url string) (model.Content, error) 
+	GetContentByID(id int) (*model.Content, error)
+	ListContent() ([]model.Content, error)
+	AssignContentToScreen(screenID, contentID int) error 
+	GetContentForScreen(screenID int) (*model.Content, error)
 }
 
 type pgStore struct { 
@@ -87,3 +94,26 @@ func (s *pgStore) DeleteScreen(id int) error {
 func (s *pgStore) AssignScreenToUser(screenID, userID int) error {
 	return AssignScreenToUser(screenID, userID)
 }
+
+// @ CONTENT
+
+func (s *pgStore) CreateContent(name, ctype, url string) (model.Content, error) {
+	return CreateContent(name, ctype, url)
+}
+
+func (s *pgStore) GetContentByID(id int) (*model.Content, error) {
+	return GetContentByID(id)
+}
+
+func (s *pgStore) ListContent() ([]model.Content, error) {
+	return ListContent()
+}
+
+func (s *pgStore) AssignContentToScreen(screenID, contentID int) error  {
+	return AssignContentToScreen(screenID, contentID) 
+}
+
+func (s *pgStore) GetContentForScreen(screenID int) (*model.Content, error) {
+	return GetContentForScreen(screenID)
+}
+

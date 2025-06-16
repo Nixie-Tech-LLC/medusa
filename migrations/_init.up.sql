@@ -31,3 +31,17 @@ CREATE TABLE IF NOT EXISTS screen_assignments (
   PRIMARY KEY (screen_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS content (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS screen_contents (
+    screen_id INT REFERENCES screens(id) ON DELETE CASCADE,
+    content_id INT REFERENCES content(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(), 
+    PRIMARY KEY (screen_id)
+)
