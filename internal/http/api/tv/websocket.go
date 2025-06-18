@@ -50,4 +50,5 @@ func TVWebSocket(secret string) gin.HandlerFunc {
 	// 		}
 	// 	}
 	// }
+	return nil
 }
