@@ -14,7 +14,7 @@ func RegisterPairingRoutes(r gin.IRoutes) {
 
 func requestPairing(c *gin.Context) {
 	var req struct {
-		DeviceID string `json:"deviceId" binding:"required"`
+		DeviceID string `json:"device_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})

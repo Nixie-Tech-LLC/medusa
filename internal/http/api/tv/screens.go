@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Nixie-Tech-LLC/medusa/internal/auth"
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
@@ -30,7 +30,7 @@ type assignScreenRequest struct {
 // screenResponse mirrors model.Screen but flattens times to RFC3339
 type screenResponse struct {
 	ID        int     `json:"id"`
-	DeviceID  string  `json:"device_id"`
+	DeviceID  *string `json:"device_id"`
 	Name      string  `json:"name"`
 	Location  *string `json:"location"`
 	Paired    bool    `json:"paired"`
@@ -74,20 +74,21 @@ func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 
 // GET /api/admin/screens
 func (t *TvController) listScreens(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	screens, err := db.ListScreens()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list screens"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	out := make([]screenResponse, len(screens))
 	for i, s := range screens {
 		out[i] = screenResponse{
 			ID:        s.ID,
+			DeviceID:  s.DeviceID,
 			Name:      s.Name,
 			Location:  s.Location,
 			Paired:    s.Paired,
@@ -100,7 +101,7 @@ func (t *TvController) listScreens(c *gin.Context) {
 
 // POST /api/admin/screens
 func (t *TvController) createScreen(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -131,7 +132,7 @@ func (t *TvController) createScreen(c *gin.Context) {
 
 // GET /api/admin/screens/:id
 func (t *TvController) getScreen(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -154,7 +155,7 @@ func (t *TvController) getScreen(c *gin.Context) {
 
 // PUT /api/admin/screens/:id
 func (t *TvController) updateScreen(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -182,7 +183,7 @@ func (t *TvController) updateScreen(c *gin.Context) {
 
 // DELETE /api/admin/screens/:id
 func (t *TvController) deleteScreen(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -197,7 +198,7 @@ func (t *TvController) deleteScreen(c *gin.Context) {
 
 // POST /api/admin/screens/:id/assign
 func (t *TvController) assignScreenToUser(c *gin.Context) {
-	_, ok := auth.GetCurrentUser(c)
+	_, ok := middleware.GetCurrentUser(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -232,7 +233,7 @@ func (t *TvController) getContentForScreen(ctx *gin.Context) {
 }
 
 func (t *TvController) assignContentToScreen(c *gin.Context) {
-	if _, ok := auth.GetCurrentUser(c); !ok {
+	if _, ok := middleware.GetCurrentUser(c); !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -267,14 +268,15 @@ func (t *TvController) assignContentToScreen(c *gin.Context) {
 }
 
 func (t *TvController) pairScreen(c *gin.Context) {
-	if _, ok := auth.GetCurrentUser(c); !ok {
+	if _, ok := middleware.GetCurrentUser(c); !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	var req struct {
 		PairingCode string `json:"code" binding:"required"`
-		ScreenID    int    `json:"id" binding:"required"`
+		UserID      int    `json:"user_id" binding:"required"`
+		ScreenID    int    `json:"screen_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -282,11 +284,23 @@ func (t *TvController) pairScreen(c *gin.Context) {
 	}
 
 	key := "pairing:" + req.PairingCode
+
+	deviceID, err := redisclient.Rdb.Get(c, key).Result()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could find deviceID for pairing code"})
+		return
+	}
+
 	redisclient.Rdb.Del(c, key)
+
+	if err := db.AssignDeviceIDToScreen(req.ScreenID, &deviceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen device ID"})
+		return
+	}
 
 	if err := db.PairScreen(req.ScreenID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen"})
 		return
 	}
-	c.JSON(200, gin.H{"message": "screen paired successfully"})
+	c.JSON(200, gin.H{"success": "screen paired successfully"})
 }

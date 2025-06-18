@@ -4,11 +4,11 @@ import (
 	"log"
 	"os"
 
-	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
-	pairingapi "github.com/Nixie-Tech-LLC/medusa/internal/api/pairing"
-	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/api/tv"
-	"github.com/Nixie-Tech-LLC/medusa/internal/auth"
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin"
+	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth"
+	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -47,20 +47,18 @@ func main() {
 	admin := r.Group("/api/admin")
 
 	// pass JWTSecret so auth handlers can issue tokens
-	adminapi.RegisterAuthRoutes(admin, secretKey, store)
+	authapi.RegisterAuthRoutes(admin, secretKey, store)
 
 	protected := admin.Group("/")
-	protected.Use(auth.JWTMiddleware(secretKey))
+	protected.Use(middleware.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
 	adminapi.RegisterContentRoutes(protected, store)
 	adminapi.RegisterScheduleRoutes(protected)
 
 	tv := r.Group("/api/tv")
-	tv.Use(auth.JWTMiddleware(secretKey))
+	tv.Use(middleware.JWTMiddleware(secretKey))
 	tvapi.RegisterScreenRoutes(tv, store)
-
-	pairing := r.Group("/api/pairing")
-	pairingapi.RegisterPairingRoutes(pairing)
+	tvapi.RegisterPairingRoutes(tv)
 
 	// start
 	log.Printf("listening on %s", serverAddress)

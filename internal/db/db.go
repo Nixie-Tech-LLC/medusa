@@ -141,7 +141,7 @@ func UpdateUserProfile(id int, email string, name *string) error {
 func GetScreenByID(id int) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, name, location, paired, created_at, updated_at
+		SELECT id, device_id, name, location, paired, created_at, updated_at
 		FROM screens
 		WHERE id = $1
 	`, id)
@@ -151,7 +151,7 @@ func GetScreenByID(id int) (model.Screen, error) {
 func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
-		SELECT id, name, location, paired, created_at, updated_at
+		SELECT id, device_id, name, location, paired, created_at, updated_at
 		FROM screens
 		ORDER BY id
 	`)
@@ -186,6 +186,16 @@ func PairScreen(id int) error {
 		    updated_at = now()
 		WHERE id = $1
 	`, id)
+	return err
+}
+
+func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET device_id = COALESCE($2, device_id),
+		    updated_at = now()
+		WHERE id = $1
+	`, screenID, deviceID)
 	return err
 }
 

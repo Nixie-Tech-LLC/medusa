@@ -1,35 +1,36 @@
-// exposes a Store interface that is passed to API calls w/ param requirements 
-package db 
+// exposes a Store interface that is passed to API calls w/ param requirements
+package db
 
 import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
-    "github.com/jmoiron/sqlx"
+	"github.com/jmoiron/sqlx"
 )
 
 type Store interface {
 	// user functions
-	CreateUser(email, hashedPassword string, name *string) (int, error) 
+	CreateUser(email, hashedPassword string, name *string) (int, error)
 	GetUserByEmail(email string) (*model.User, error)
 	GetUserByID(id int) (*model.User, error)
 	UpdateUserProfile(id int, email string, name *string) error
 
 	// screen functions
-	GetScreenByID(id int) (model.Screen, error) 
+	GetScreenByID(id int) (model.Screen, error)
 	ListScreens() ([]model.Screen, error)
-	CreateScreen(name string, location *string) (model.Screen, error) 
-	UpdateScreen(id int, name, location *string) error 
-	DeleteScreen(id int) error 
-	AssignScreenToUser(screenID, userID int) error 
+	CreateScreen(name string, location *string) (model.Screen, error)
+	UpdateScreen(id int, name, location *string) error
+	DeleteScreen(id int) error
+	AssignScreenToUser(screenID, userID int) error
+	AssignDeviceIDToScreen(screenID int, deviceID *string) error
 
 	// content functions
-	CreateContent(name, ctype, url string) (model.Content, error) 
+	CreateContent(name, ctype, url string) (model.Content, error)
 	GetContentByID(id int) (*model.Content, error)
 	ListContent() ([]model.Content, error)
-	AssignContentToScreen(screenID, contentID int) error 
+	AssignContentToScreen(screenID, contentID int) error
 	GetContentForScreen(screenID int) (*model.Content, error)
 }
 
-type pgStore struct { 
+type pgStore struct {
 	db *sqlx.DB
 }
 
@@ -50,7 +51,7 @@ func (s *pgStore) CreateUser(email, hashedPassword string, name *string) (int, e
 
 // shell function that points to ./db.go:GetUserByEmail
 func (s *pgStore) GetUserByEmail(email string) (*model.User, error) {
-	return GetUserByEmail(email);
+	return GetUserByEmail(email)
 }
 
 // shell function that points to ./db.go:GetUserByID
@@ -95,6 +96,10 @@ func (s *pgStore) AssignScreenToUser(screenID, userID int) error {
 	return AssignScreenToUser(screenID, userID)
 }
 
+func (s *pgStore) AssignDeviceIDToScreen(screenID int, deviceID *string) error {
+	return AssignDeviceIDToScreen(screenID, deviceID)
+}
+
 // @ CONTENT
 
 func (s *pgStore) CreateContent(name, ctype, url string) (model.Content, error) {
@@ -109,11 +114,10 @@ func (s *pgStore) ListContent() ([]model.Content, error) {
 	return ListContent()
 }
 
-func (s *pgStore) AssignContentToScreen(screenID, contentID int) error  {
-	return AssignContentToScreen(screenID, contentID) 
+func (s *pgStore) AssignContentToScreen(screenID, contentID int) error {
+	return AssignContentToScreen(screenID, contentID)
 }
 
 func (s *pgStore) GetContentForScreen(screenID int) (*model.Content, error) {
 	return GetContentForScreen(screenID)
 }
-
