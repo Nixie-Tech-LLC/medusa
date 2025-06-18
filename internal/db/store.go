@@ -71,6 +71,16 @@ func (s *pgStore) GetScreenByID(id int) (model.Screen, error) {
 	return GetScreenByID(id)
 }
 
+// shell function that points to ./db.go:GetScreenByID
+func (s *pgStore) GetScreenByDeviceID(device_id *string) (model.Screen, error) {
+	return GetScreenByDeviceID(device_id)
+}
+
+// shell function that points to ./db.go:GetScreenByID
+func (s *pgStore) IsScreenPairedByDeviceID(device_id *string) (bool, error) {
+	return IsScreenPairedByDeviceID(device_id)
+}
+
 // shell function that points to ./db.go:ListScreens
 func (s *pgStore) ListScreens() ([]model.Screen, error) {
 	return ListScreens()

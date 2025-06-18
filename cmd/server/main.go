@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin"
-	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth"
-	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv"
+	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
+	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
+	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"

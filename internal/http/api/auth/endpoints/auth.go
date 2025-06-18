@@ -1,4 +1,4 @@
-package admin
+package endpoints
 
 import (
 	"net/http"
@@ -7,30 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 )
-
-// body for registering
-type signupRequest struct {
-	Email    string  `json:"email" binding:"required,email"`
-	Password string  `json:"password" binding:"required,min=8"`
-	Name     *string `json:"name"`
-}
-
-// body for logging in
-type loginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-// returned for profile endpoints
-type profileResponse struct {
-	ID        int     `json:"id"`
-	Email     string  `json:"email"`
-	Name      *string `json:"name"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
-}
 
 type AccountManager struct {
 	jwtSecret string
@@ -53,24 +32,24 @@ func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 
 // POST /api/admin/auth/signup
 func (a *AccountManager) userSignup(c *gin.Context) {
-	var req signupRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.SignupRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if existing, _ := a.store.GetUserByEmail(req.Email); existing != nil {
+	if existing, _ := a.store.GetUserByEmail(request.Email); existing != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 		return
 	}
 
-	hashed, err := middleware.HashPassword(req.Password)
+	hashed, err := middleware.HashPassword(request.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not hash password"})
 		return
 	}
 
-	userID, err := a.store.CreateUser(req.Email, hashed, req.Name)
+	userID, err := a.store.CreateUser(request.Email, hashed, request.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create user"})
 		return
@@ -87,14 +66,14 @@ func (a *AccountManager) userSignup(c *gin.Context) {
 
 // POST /api/admin/auth/login
 func (a *AccountManager) userLogin(c *gin.Context) {
-	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.LoginRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := a.store.GetUserByEmail(req.Email)
-	if err != nil || !middleware.CheckPassword(user.HashedPassword, req.Password) {
+	user, err := a.store.GetUserByEmail(request.Email)
+	if err != nil || !middleware.CheckPassword(user.HashedPassword, request.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -115,7 +94,7 @@ func (a *AccountManager) getCurrentProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
 		return
 	}
-	c.JSON(http.StatusOK, profileResponse{
+	c.JSON(http.StatusOK, packets.ProfileResponse{
 		ID:        currentUser.ID,
 		Email:     currentUser.Email,
 		Name:      currentUser.Name,
@@ -132,23 +111,20 @@ func (a *AccountManager) updateCurrentProfile(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Email string  `json:"email" binding:"required,email"`
-		Name  *string `json:"name"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.UpdateCurrentProfileRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.Email != currentUser.Email {
-		if other, _ := a.store.GetUserByEmail(req.Email); other != nil {
+	if request.Email != currentUser.Email {
+		if other, _ := a.store.GetUserByEmail(request.Email); other != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
 			return
 		}
 	}
 
-	if err := a.store.UpdateUserProfile(currentUser.ID, req.Email, req.Name); err != nil {
+	if err := a.store.UpdateUserProfile(currentUser.ID, request.Email, request.Name); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update profile"})
 		return
 	}
@@ -159,7 +135,7 @@ func (a *AccountManager) updateCurrentProfile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, profileResponse{
+	c.JSON(http.StatusOK, packets.ProfileResponse{
 		ID:        updated.ID,
 		Email:     updated.Email,
 		Name:      updated.Name,

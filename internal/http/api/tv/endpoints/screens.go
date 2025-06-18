@@ -1,4 +1,4 @@
-package admin
+package endpoints
 
 import (
 	"fmt"
@@ -9,42 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
-
-type createScreenRequest struct {
-	Name     string  `json:"name" binding:"required"`
-	Location *string `json:"location"`
-}
-
-type updateScreenRequest struct {
-	Name     *string `json:"name"`
-	Location *string `json:"location"`
-}
-
-type assignScreenRequest struct {
-	UserID int `json:"user_id" binding:"required"`
-}
-
-// screenResponse mirrors model.Screen but flattens times to RFC3339
-type screenResponse struct {
-	ID        int     `json:"id"`
-	DeviceID  *string `json:"device_id"`
-	Name      string  `json:"name"`
-	Location  *string `json:"location"`
-	Paired    bool    `json:"paired"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
-}
-
-type contentResponse struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	URL       string `json:"url"`
-	CreatedAt string `json:"created_at"`
-}
 
 type TvController struct {
 	store db.Store
@@ -84,9 +52,9 @@ func (t *TvController) listScreens(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	out := make([]screenResponse, len(screens))
+	out := make([]packets.ScreenResponse, len(screens))
 	for i, s := range screens {
-		out[i] = screenResponse{
+		out[i] = packets.ScreenResponse{
 			ID:        s.ID,
 			DeviceID:  s.DeviceID,
 			Name:      s.Name,
@@ -107,20 +75,20 @@ func (t *TvController) createScreen(c *gin.Context) {
 		return
 	}
 
-	var req createScreenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.CreateScreenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	screen, err := db.CreateScreen(req.Name, req.Location)
+	screen, err := db.CreateScreen(request.Name, request.Location)
 	if err != nil {
 		fmt.Println("CreateScreen error:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create screen"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, screenResponse{
+	c.JSON(http.StatusCreated, packets.ScreenResponse{
 		ID:        screen.ID,
 		Name:      screen.Name,
 		Location:  screen.Location,
@@ -143,7 +111,7 @@ func (t *TvController) getScreen(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "screen not found"})
 		return
 	}
-	c.JSON(http.StatusOK, screenResponse{
+	c.JSON(http.StatusOK, packets.ScreenResponse{
 		ID:        screen.ID,
 		Name:      screen.Name,
 		Location:  screen.Location,
@@ -161,17 +129,17 @@ func (t *TvController) updateScreen(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	var req updateScreenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.UpdateScreenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := db.UpdateScreen(id, req.Name, req.Location); err != nil {
+	if err := db.UpdateScreen(id, request.Name, request.Location); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen"})
 		return
 	}
 	updated, _ := db.GetScreenByID(id)
-	c.JSON(http.StatusOK, screenResponse{
+	c.JSON(http.StatusOK, packets.ScreenResponse{
 		ID:        updated.ID,
 		Name:      updated.Name,
 		Location:  updated.Location,
@@ -204,12 +172,12 @@ func (t *TvController) assignScreenToUser(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	var req assignScreenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.AssignScreenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := db.AssignScreenToUser(id, req.UserID); err != nil {
+	if err := db.AssignScreenToUser(id, request.UserID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not assign screen"})
 		return
 	}
@@ -223,7 +191,7 @@ func (t *TvController) getContentForScreen(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "no content assigned"})
 		return
 	}
-	ctx.JSON(http.StatusOK, contentResponse{
+	ctx.JSON(http.StatusOK, packets.ContentResponse{
 		ID:        c.ID,
 		Name:      c.Name,
 		Type:      c.Type,
@@ -240,15 +208,13 @@ func (t *TvController) assignContentToScreen(c *gin.Context) {
 
 	screenID, _ := strconv.Atoi(c.Param("id"))
 
-	var req struct {
-		ContentID int `json:"content_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.AssignContentToScreenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := db.AssignContentToScreen(screenID, req.ContentID); err != nil {
+	if err := db.AssignContentToScreen(screenID, request.ContentID); err != nil {
 		fmt.Printf("AssignContentToScreen error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -273,17 +239,13 @@ func (t *TvController) pairScreen(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		PairingCode string `json:"code" binding:"required"`
-		UserID      int    `json:"user_id" binding:"required"`
-		ScreenID    int    `json:"screen_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.PairScreenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	key := "pairing:" + req.PairingCode
+	key := "pairing:" + request.PairingCode
 
 	deviceID, err := redisclient.Rdb.Get(c, key).Result()
 	if err != nil {
@@ -293,14 +255,15 @@ func (t *TvController) pairScreen(c *gin.Context) {
 
 	redisclient.Rdb.Del(c, key)
 
-	if err := db.AssignDeviceIDToScreen(req.ScreenID, &deviceID); err != nil {
+	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen device ID"})
 		return
 	}
 
-	if err := db.PairScreen(req.ScreenID); err != nil {
+	if err := db.PairScreen(request.ScreenID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen"})
 		return
 	}
+
 	c.JSON(200, gin.H{"success": "screen paired successfully"})
 }

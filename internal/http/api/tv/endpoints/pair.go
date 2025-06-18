@@ -1,9 +1,11 @@
-package admin
+package endpoints
 
 import (
 	"math/rand"
 	"time"
 
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"
 )
@@ -13,18 +15,18 @@ func RegisterPairingRoutes(r gin.IRoutes) {
 }
 
 func requestPairing(c *gin.Context) {
-	var req struct {
-		DeviceID string `json:"device_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request packets.PairingRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	code := generatePairCode()
-	key := "pairing:" + code
+	db.IsScreenPairedByDeviceID(&request.DeviceID)
 
-	err := redisclient.Rdb.Set(c, key, req.DeviceID, 5*time.Minute).Err()
+	code := generatePairCode()
+	key := code
+
+	err := redisclient.Rdb.Set(c, request.DeviceID, key, 5*time.Minute).Err()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "internal error"})
 		return

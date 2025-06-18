@@ -148,6 +148,26 @@ func GetScreenByID(id int) (model.Screen, error) {
 	return screen, err
 }
 
+func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
+	var screen model.Screen
+	err := DB.Get(&screen, `
+		SELECT id, device_id, name, location, paired, created_at, updated_at
+		FROM screens
+		WHERE device_id = $1
+	`, deviceID)
+	return screen, err
+}
+
+func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
+	var isPaired bool
+	err := DB.Get(isPaired, `
+		SELECT paired
+		FROM screens
+		WHERE device_id = $1
+	`, deviceID)
+	return isPaired, err
+}
+
 func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
