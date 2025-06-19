@@ -12,6 +12,7 @@ import (
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/jmoiron/sqlx"
 )
 
 func main() {
@@ -40,8 +41,13 @@ func main() {
 
 	// set up gin router
 	r := gin.Default()
+	
+	sqlxDB, err := sqlx.Connect("postgres", databaseUrl)
 
-	store := db.NewStore()
+	if err != nil {
+		log.Fatalf("Failed to connect to db via sqlx: %v", err)
+	}
+	store := db.NewStore(sqlxDB)
 	redisclient.InitRedis()
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
