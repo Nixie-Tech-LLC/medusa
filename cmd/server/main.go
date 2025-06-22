@@ -27,6 +27,12 @@ func main() {
 	secretKey := os.Getenv("JWT_SECRET")
 	serverAddress := os.Getenv("SERVER_ADDRESS")
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
+
+	// Set MQTT broker URL if provided
+	if mqttBrokerURL != "" {
+		middleware.SetBrokerURL(mqttBrokerURL)
+	}
 
 	// initialize PostgreSQL
 	if err := db.Init(databaseUrl); err != nil {
@@ -36,6 +42,11 @@ func main() {
 	// run pending migrations
 	if err := db.RunMigrations(migrationsPath); err != nil {
 		log.Fatalf("db migrate: %v", err)
+	}
+
+	// initialize MQTT
+	if err := middleware.InitMQTT(); err != nil {
+		log.Fatalf("mqtt init: %v", err)
 	}
 
 	// set up gin router
@@ -54,10 +65,9 @@ func main() {
 	// apply JWTMiddleware for all the admin routes that follow
 	adminapi.RegisterContentRoutes(protected, store)
 	adminapi.RegisterScheduleRoutes(protected)
+	adminapi.RegisterScreenRoutes(protected, store)
 
 	tv := r.Group("/api/tv")
-	tv.Use(middleware.JWTMiddleware(secretKey))
-	tvapi.RegisterScreenRoutes(tv, store)
 	tvapi.RegisterPairingRoutes(tv)
 
 	// start

@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -35,29 +36,34 @@ func (a *AccountManager) userSignup(c *gin.Context) {
 	var request packets.SignupRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("Error binding JSON: %v", err)
 		return
 	}
 
 	if existing, _ := a.store.GetUserByEmail(request.Email); existing != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered, please sign up with a different email"})
+		log.Printf("Email conflict: %s already registered", request.Email)
 		return
 	}
 
 	hashed, err := middleware.HashPassword(request.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not hash password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Error hashing password for email %s: %v", request.Email, err)
 		return
 	}
 
 	userID, err := a.store.CreateUser(request.Email, hashed, request.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Could not create user for email %s: %v", request.Email, err)
 		return
 	}
 
 	token, err := middleware.GenerateJWT(userID, a.jwtSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Could not generate JWT for user %d: %v", userID, err)
 		return
 	}
 
@@ -69,18 +75,21 @@ func (a *AccountManager) userLogin(c *gin.Context) {
 	var request packets.LoginRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("Error binding JSON: %v", err)
 		return
 	}
 
 	user, err := a.store.GetUserByEmail(request.Email)
 	if err != nil || !middleware.CheckPassword(user.HashedPassword, request.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		log.Printf("Login failed for email %s: %v", request.Email, err)
 		return
 	}
 
 	token, err := middleware.GenerateJWT(user.ID, a.jwtSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Could not generate JWT for user %d: %v", user.ID, err)
 		return
 	}
 
@@ -114,24 +123,28 @@ func (a *AccountManager) updateCurrentProfile(c *gin.Context) {
 	var request packets.UpdateCurrentProfileRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("Error binding JSON: %v", err)
 		return
 	}
 
 	if request.Email != currentUser.Email {
 		if other, _ := a.store.GetUserByEmail(request.Email); other != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
+			log.Printf("Email conflict: %s already registered", request.Email)
 			return
 		}
 	}
 
 	if err := a.store.UpdateUserProfile(currentUser.ID, request.Email, request.Name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Error updating profile for user %d: %v", currentUser.ID, err)
 		return
 	}
 
 	updated, err := a.store.GetUserByID(currentUser.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch updated profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
+		log.Printf("Error fetching updated profile for user %d: %v", currentUser.ID, err)
 		return
 	}
 

@@ -6,12 +6,14 @@ import (
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"
 )
 
 func RegisterPairingRoutes(r gin.IRoutes) {
-	r.POST("/request", requestPairing)
+	r.POST("/pair/request", requestPairing)
+	r.GET("/socket", middleware.TVWebSocket())
 }
 
 func requestPairing(c *gin.Context) {
@@ -23,16 +25,15 @@ func requestPairing(c *gin.Context) {
 
 	db.IsScreenPairedByDeviceID(&request.DeviceID)
 
-	code := generatePairCode()
-	key := code
+	pairingCode := generatePairCode()
 
-	err := redisclient.Rdb.Set(c, request.DeviceID, key, 5*time.Minute).Err()
+	err := redisclient.Rdb.Set(c, pairingCode, request.DeviceID, 1*time.Minute).Err()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "internal error"})
 		return
 	}
 
-	c.JSON(200, gin.H{"code": code})
+	c.JSON(200, gin.H{"code": pairingCode})
 }
 
 func generatePairCode() string {

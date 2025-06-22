@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -96,16 +97,36 @@ func (c *ContentController) createContent(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not assign content to screen"})
 			return
 		}
-		// fire-and-forget signalling to the TV app:
+
+		// Send MQTT message to notify the TV device
 		go func(screenID int) {
-			// first lookup the screen to get its Location
+			// Get screen details to find the device ID
 			screen, err := c.store.GetScreenByID(screenID)
-			if err != nil || screen.Location == nil {
+			if err != nil || screen.DeviceID == nil {
 				return
 			}
-			// assume the TV app listens on HTTP at this location + "/update"
-			signalURL := fmt.Sprintf("%s/update", *screen.Location)
-			http.Get(signalURL) // ignore errors
+
+			// Create update message
+			updateMessage := map[string]interface{}{
+				"type":         "content_update",
+				"content_id":   content.ID,
+				"content_name": content.Name,
+				"content_type": content.Type,
+				"content_url":  content.URL,
+				"timestamp":    time.Now().Unix(),
+			}
+
+			// Convert to JSON
+			messageBytes, err := json.Marshal(updateMessage)
+			if err != nil {
+				return
+			}
+
+			// Send via MQTT
+			if err := middleware.SendMessageToScreen(*screen.DeviceID, messageBytes); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Failed to send MQTT message to device %s: %v\n", *screen.DeviceID, err)
+			}
 		}(*request.ScreenID)
 	}
 
