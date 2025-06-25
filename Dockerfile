@@ -10,6 +10,7 @@ RUN go build -o server ./cmd/server
 # Final image
 FROM alpine:latest
 WORKDIR /root/
+RUN apk add curl
 COPY --from=builder /app/server .
 COPY --from=builder /app/migrations /app/migrations
 EXPOSE 8080

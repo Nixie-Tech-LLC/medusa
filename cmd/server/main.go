@@ -39,6 +39,7 @@ func main() {
 		log.Fatalf("db migrate: %v", err)
 	}
 
+
 	// set up gin router
 	r := gin.Default()
 	

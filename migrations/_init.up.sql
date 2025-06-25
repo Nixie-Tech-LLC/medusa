@@ -1,3 +1,12 @@
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    hashed_password TEXT NOT NULL,
+    name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS screens (
     id SERIAL PRIMARY KEY,
     device_id TEXT NOT NULL UNIQUE,
@@ -17,14 +26,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     content_url TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    hashed_password TEXT NOT NULL,
-    name TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+
 
 CREATE TABLE IF NOT EXISTS screen_assignments (
     screen_id INT REFERENCES screens(id),
@@ -37,7 +39,6 @@ CREATE TABLE IF NOT EXISTS content (
     name        TEXT NOT NULL,
     type        TEXT NOT NULL,
     url         TEXT NOT NULL,
-    metadata    JSONB,
     default_duration INT NOT NULL,
     created_by  INT NOT NULL REFERENCES users(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -49,7 +50,7 @@ CREATE TABLE IF NOT EXISTS screen_contents (
     content_id INT REFERENCES content(id) ON DELETE CASCADE,
     assigned_at TIMESTAMP NOT NULL DEFAULT NOW(), 
     PRIMARY KEY (screen_id)
-)
+);
 
 -- Playlists
 CREATE TABLE IF NOT EXISTS playlists (
