@@ -21,7 +21,11 @@ The server side of the digital signage software
 │   │   │   ├── schedules.go
 │   │   │   └── screens.go
 │   │   └── tv
-│   │       └── screens.go
+│   │       ├── socket/
+│   │       │   ├── mqtt.go
+│   │       │   └── README.md
+│   │       ├── endpoints/
+│   │       └── packets/
 │   ├── auth
 │   │   └── auth.go
 │   ├── config
@@ -57,13 +61,43 @@ The `config/` directory is for runtime environment variable implementation and r
 
 - **Go 1.24+**  
 - **PostgreSQL 13+** (client & server)  
+- **MQTT Broker** (for TV device communication)
 - **Docker** (optional, for containerized testing)  
 - **golang-migrate CLI** (only if you want to run migrations manually)  
   ```bash
   go install -tags 'postgres file' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
   export PATH="$PATH:$(go env GOPATH)/bin"
 
-### 2. Setup
+### 3. MQTT Communication
+
+The system uses MQTT for real-time communication with TV devices. This replaces the previous WebSocket implementation.
+
+#### Setup MQTT Broker
+
+You'll need an MQTT broker running. Popular options include:
+- **Mosquitto** (open source): `docker run -p 1883:1883 eclipse-mosquitto:latest`
+- **Eclipse HiveMQ**
+- **AWS IoT Core**
+- **Azure IoT Hub**
+
+#### Configuration
+
+Set the `MQTT_BROKER_URL` environment variable (default: `tcp://localhost:1883`):
+
+```bash
+export MQTT_BROKER_URL="tcp://localhost:1883"
+```
+
+#### TV Device Connection
+
+TV devices connect via the `/api/tv/socket` endpoint with a `device_id` parameter. The system automatically:
+- Creates an MQTT client for each device
+- Subscribes to device-specific topics (`tv/{device_id}/commands`)
+- Handles automatic reconnection
+
+For detailed MQTT implementation information, see `internal/http/api/tv/socket/README.md`.
+
+### 4. Setup
 Set up PostgreSQL db + user
 ```bash
 sudo -iu postgres initdb --locale en_US.UTF-8 -D /var/lib/postgres/data
@@ -80,7 +114,7 @@ Run database migrations
 migrate -path ./migrations -database "$DATABASE_URL" up
 ```
 
-### 3. Build and run
+### 5. Build and run
 
 ```bash
 # From project root

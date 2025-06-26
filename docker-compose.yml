@@ -1,8 +1,8 @@
 services:
-  db:
+  postgres:
     image: postgres:13
-    container_name: medusa-db
-    restart: unless-stopped
+    container_name: medusa-postgres
+    restart: always
     environment:
       POSTGRES_USER: medusa_user
       POSTGRES_PASSWORD: mysecretpassword
@@ -10,26 +10,59 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - mqtt-network
+    
+  redis:
+    image: redis:8.0
+    container_name: medusa-redis
+    restart: always
+    environment:
+      REDIS_PASSWORD: mysecretpassword
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mqtt-network
+
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: medusa-mqtt
+    ports:
+      - "1883:1883" #default mqtt port
+      - "9001:9001" #default mqtt port for websockets
+    volumes:
+      - ./config:/mosquitto/config:rw
+      - ./data:/mosquitto/data:rw
+      - ./log:/mosquitto/log:rw
+    restart: unless-stopped
+    networks:
+      - mqtt-network
 
   medusa:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medusa
-    restart: on-failure
-    env_file: .env
+    container_name: medusa-app
+    env_file: MEDUSA_LOCAL.env
     depends_on:
-      - db
+      - postgres
+      - redis
+      - mqtt
     ports:
       - "8080:8080"
     networks:
-      - medusa-net
+      - mqtt-network
 
 volumes:
-  db_data:
+  pgdata:
+  redis_data:
+  air-cache:
+  config:
+  data:
+  log:
 
 networks:
-  medusa-net:
-    driver: bridge
-
+  mqtt-network:
