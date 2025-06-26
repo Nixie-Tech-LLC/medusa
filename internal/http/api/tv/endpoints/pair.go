@@ -12,12 +12,12 @@ import (
 )
 
 func RegisterPairingRoutes(r gin.IRoutes) {
-	r.POST("/pair/request", requestPairing)
+	r.POST("/pair", requestPairing)
 	r.GET("/socket", middleware.TVWebSocket())
 }
 
 func requestPairing(c *gin.Context) {
-	var request packets.PairingRequest
+	var request packets.TVRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -25,15 +25,16 @@ func requestPairing(c *gin.Context) {
 
 	db.IsScreenPairedByDeviceID(&request.DeviceID)
 
-	pairingCode := generatePairCode()
+	code := generatePairCode()
+	key := code
 
-	err := redisclient.Rdb.Set(c, pairingCode, request.DeviceID, 1*time.Minute).Err()
+	err := redisclient.Rdb.Set(c, key, request.DeviceID, 5*time.Minute).Err()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "internal error"})
 		return
 	}
 
-	c.JSON(200, gin.H{"code": pairingCode})
+	c.JSON(200, gin.H{"code": code})
 }
 
 func generatePairCode() string {

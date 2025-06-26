@@ -74,12 +74,13 @@ func (t *TvController) createScreen(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
 	var request packets.CreateScreenRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	middleware.InitMQTTClient(request.Name)
 
 	screen, err := db.CreateScreen(request.Name, request.Location)
 	if err != nil {
@@ -87,7 +88,6 @@ func (t *TvController) createScreen(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create screen"})
 		return
 	}
-
 	c.JSON(http.StatusCreated, packets.ScreenResponse{
 		ID:        screen.ID,
 		Name:      screen.Name,
@@ -219,16 +219,23 @@ func (t *TvController) assignContentToScreen(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	content, err := db.GetContentForScreen(screenID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-	// fire-and-forget the TV signal, same as in createContent:
-	go func() {
-		screen, err := db.GetScreenByID(screenID)
-		if err != nil || screen.Location == nil {
-			return
-		}
-		signalURL := fmt.Sprintf("%s/update", *screen.Location)
-		http.Get(signalURL)
-	}()
+	screen, err := db.GetScreenByID(screenID)
+	if err != nil || screen.DeviceID == nil {
+		return
+	}
+	middleware.SendMessageToScreen(*screen.DeviceID, packets.ContentResponse{
+		ID:        content.ID,
+		Name:      content.Name,
+		Type:      content.Type,
+		URL:       content.URL,
+		CreatedAt: content.CreatedAt.String(),
+	})
 
 	c.Status(http.StatusOK)
 }
@@ -245,16 +252,17 @@ func (t *TvController) pairScreen(c *gin.Context) {
 		return
 	}
 
-	key := "pairing:" + request.PairingCode
+	key := request.PairingCode
 
+	// Pull the deviceID from Redis using the pairing code
 	deviceID, err := redisclient.Rdb.Get(c, key).Result()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could find deviceID for pairing code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not find deviceID for pairing code"})
 		return
 	}
-
 	redisclient.Rdb.Del(c, key)
 
+	// Assign the deviceID to the screen in Postgres
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update screen device ID"})
 		return

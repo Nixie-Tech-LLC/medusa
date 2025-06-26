@@ -29,6 +29,5 @@ type AssignContentToScreenRequest struct {
 
 type PairScreenRequest struct {
 	PairingCode string `json:"code" binding:"required"`
-	UserID      int    `json:"user_id" binding:"required"`
 	ScreenID    int    `json:"screen_id" binding:"required"`
 }

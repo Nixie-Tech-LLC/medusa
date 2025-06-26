@@ -1,20 +1,10 @@
 # MQTT Socket Implementation
 
-This package provides MQTT-based communication for TV devices in the Medusa system, replacing the previous WebSocket implementation.
-
-## Overview
-
-The MQTT implementation provides:
-- Real-time communication between the server and TV devices
-- Automatic reconnection handling
-- Topic-based messaging for device-specific commands
-- Support for broadcasting messages to all connected devices
-
 ## Configuration
 
 ### Environment Variables
 
-- `MQTT_BROKER_URL`: MQTT broker URL (default: `tcp://localhost:1883`)
+- `MQTT_BROKER_URL`: MQTT broker URL (default: `ws://medusa-mqtt:9001`)
 
 ### Broker Setup
 
@@ -23,6 +13,8 @@ You'll need an MQTT broker running. Popular options include:
 - Eclipse HiveMQ
 - AWS IoT Core
 - Azure IoT Hub
+
+Docker compose contains the setup for a broker
 
 ## Usage
 
@@ -36,34 +28,26 @@ The server automatically initializes MQTT on startup. TV devices connect via the
 2. Subscribe to their device-specific topic: `tv/{device_id}/commands`
 3. Listen for messages and handle them accordingly
 
-### Sending Messages
+### Example Communication
 
-```go
-// Send message to specific device
-err := middleware.SendMessageToScreen("device123", []byte(`{"type": "content_update", "content_id": 1}`))
+1. Create screen via POST `admin/screens`
+2. Create a pair request via POST `tv/pair`
+3. Pair the created screen with the tv via POST `admin/screens/pair`
+4. Create content via POST `admin/content`
+5. Simulate a TV websocket connection via GET `tv/socket` passing in the deviceID from step 3
+6. Assign content to the screen via POST `admin/screens/:screenID/content`
 
-// Send message to all connected devices
-err := middleware.SendMessageToAllScreens([]byte(`{"type": "broadcast", "message": "Hello all TVs!"}`))
+In the medusa-app container logs, you should see something like:
+
+```bash
+--:--:-- Message sent to TV device DEVICE_ID via MQTT
+--:--:-- Received message: {"id": CONTENT_ID,"name":"CONTENT_NAME","type":"CONTENT_TYPE","url":"CONTENT_URL","created_at":"CONTENT_DATETIME"} from topic: tv/DEVICE_ID/commands
 ```
 
-### Message Format
-
-Messages are sent as JSON with the following structure:
-
-```json
-{
-  "type": "content_update",
-  "content_id": 123,
-  "content_name": "Video Title",
-  "content_type": "video",
-  "content_url": "https://example.com/video.mp4",
-  "timestamp": 1640995200
-}
-```
 
 ## API Functions
 
-- `InitMQTT()`: Initialize the MQTT client
+- `InitMQTTClient(clientName)`: Initialize an MQTT client with clientName
 - `SetBrokerURL(url)`: Configure the MQTT broker URL
 - `SendMessageToScreen(deviceID, message)`: Send message to specific device
 - `SendMessageToAllScreens(message)`: Broadcast message to all devices
@@ -75,7 +59,3 @@ Messages are sent as JSON with the following structure:
 
 - `tv/{device_id}/commands`: Device-specific commands
 - Each device subscribes to its own topic for receiving commands
-
-## Error Handling
-
-The implementation includes automatic reconnection and error logging. Failed message sends are logged but don't crash the application. 

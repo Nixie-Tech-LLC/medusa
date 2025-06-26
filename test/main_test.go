@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/api/admin"
-	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/auth"
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/gin-gonic/gin"
 )
 
 func setupRouter(secret string, store db.Store) *gin.Engine {
@@ -20,7 +20,7 @@ func setupRouter(secret string, store db.Store) *gin.Engine {
 
 	adminapi.RegisterAuthRoutes(group, secret, store)
 
-	protected := group.Group("/") 
+	protected := group.Group("/")
 
 	protected.Use(auth.JWTMiddleware(secret))
 	adminapi.RegisterScreenRoutes(protected)
@@ -32,7 +32,7 @@ func setupRouter(secret string, store db.Store) *gin.Engine {
 
 func TestSignupLoginAndProfile(t *testing.T) {
 	jwtSecret := "supersecret"
-	mockStore := db.NewStore() 
+	mockStore := db.NewStore()
 	router := setupRouter(jwtSecret, mockStore)
 
 	signupBody := map[string]interface{}{
@@ -69,5 +69,3 @@ func TestSignupLoginAndProfile(t *testing.T) {
 		t.Fatalf("Current profile failed: %s", w.Body.String())
 	}
 }
-
-

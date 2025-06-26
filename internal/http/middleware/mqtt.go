@@ -1,12 +1,15 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	tvpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +18,7 @@ var (
 	tvClients   = make(map[string]mqtt.Client)
 	clientMutex sync.RWMutex
 	mqttClient  mqtt.Client
-	brokerURL   = "tcp://localhost:1883" // Default MQTT broker URL
+	brokerURL   = "tcp://0.0.0.0:1883" // Default MQTT broker URL
 )
 
 // MQTT message handler for TV devices
@@ -34,10 +37,10 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 }
 
 // Initialize MQTT client
-func InitMQTT() error {
+func InitMQTTClient(clientName string) error {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
-	opts.SetClientID("medusa-server")
+	opts.SetClientID(clientName)
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
@@ -59,13 +62,13 @@ func SetBrokerURL(url string) {
 // TVWebSocket is now an MQTT-based handler for TV device connections
 func TVWebSocket() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		deviceID := c.Query("device_id")
-		if deviceID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "device_id is required"})
+		var request tvpackets.TVRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 
-		screen, err := db.GetScreenByDeviceID(&deviceID)
+		screen, err := db.GetScreenByDeviceID(&request.DeviceID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
 			return
@@ -74,22 +77,22 @@ func TVWebSocket() gin.HandlerFunc {
 		// Create MQTT client for this TV device
 		opts := mqtt.NewClientOptions()
 		opts.AddBroker(brokerURL)
-		opts.SetClientID(fmt.Sprintf("tv-%s", deviceID))
+		opts.SetClientID(fmt.Sprintf("tv-%s", request.DeviceID))
 		opts.SetDefaultPublishHandler(messagePubHandler)
 		opts.OnConnect = connectHandler
 		opts.OnConnectionLost = connectLostHandler
 
 		client := mqtt.NewClient(opts)
 		if token := client.Connect(); token.Wait() && token.Error() != nil {
-			log.Printf("Failed to connect TV device %s to MQTT: %v", deviceID, token.Error())
+			log.Printf("Failed to connect TV device %s to MQTT: %v", request.DeviceID, token.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to MQTT broker"})
 			return
 		}
 
 		// Subscribe to device-specific topic
-		topic := fmt.Sprintf("tv/%s/commands", deviceID)
+		topic := fmt.Sprintf("tv/%s/commands", request.DeviceID)
 		if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
-			log.Printf("Failed to subscribe TV device %s to topic %s: %v", deviceID, topic, token.Error())
+			log.Printf("Failed to subscribe TV device %s to topic %s: %v", request.DeviceID, topic, token.Error())
 			client.Disconnect(250)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
 			return
@@ -100,12 +103,12 @@ func TVWebSocket() gin.HandlerFunc {
 		tvClients[*screen.DeviceID] = client
 		clientMutex.Unlock()
 
-		log.Printf("MQTT connected: screen %d (device: %s)", screen.ID, deviceID)
+		log.Printf("MQTT connected: screen %d (device: %s)", screen.ID, request.DeviceID)
 
 		// Send connection success response
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "connected",
-			"device_id": deviceID,
+			"device_id": request.DeviceID,
 			"topic":     topic,
 		})
 
@@ -115,17 +118,19 @@ func TVWebSocket() gin.HandlerFunc {
 }
 
 // SendMessageToScreen sends a message to a specific TV screen via MQTT
-func SendMessageToScreen(deviceID string, message []byte) error {
+func SendMessageToScreen(deviceID string, message adminpackets.ContentResponse) error {
 	clientMutex.RLock()
 	client, exists := tvClients[deviceID]
 	clientMutex.RUnlock()
-
 	if !exists {
 		return fmt.Errorf("TV device %s not connected", deviceID)
 	}
-
 	topic := fmt.Sprintf("tv/%s/commands", deviceID)
-	token := client.Publish(topic, 1, false, message)
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %v", err)
+	}
+	token := client.Publish(topic, 1, false, payload)
 	token.Wait()
 
 	if token.Error() != nil {

@@ -45,7 +45,7 @@ func main() {
 	}
 
 	// initialize MQTT
-	if err := middleware.InitMQTT(); err != nil {
+	if err := middleware.InitMQTTClient("medusa-server"); err != nil {
 		log.Fatalf("mqtt init: %v", err)
 	}
 

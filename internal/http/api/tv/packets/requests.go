@@ -1,6 +1,6 @@
 package packets
 
 // REQUESTS FOR /api/tv/pair
-type PairingRequest struct {
+type TVRequest struct {
 	DeviceID string `json:"device_id" binding:"required"`
 }

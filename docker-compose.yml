@@ -11,6 +11,8 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - mqtt-network
     
   redis:
     image: redis:8.0
@@ -22,6 +24,22 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - mqtt-network
+
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: medusa-mqtt
+    ports:
+      - "1883:1883" #default mqtt port
+      - "9001:9001" #default mqtt port for websockets
+    volumes:
+      - ./config:/mosquitto/config:rw
+      - ./data:/mosquitto/data:rw
+      - ./log:/mosquitto/log:rw
+    restart: unless-stopped
+    networks:
+      - mqtt-network
 
   medusa:
     build:
@@ -32,11 +50,19 @@ services:
     depends_on:
       - postgres
       - redis
+      - mqtt
     ports:
       - "8080:8080"
+    networks:
+      - mqtt-network
 
 volumes:
   pgdata:
   redis_data:
   air-cache:
+  config:
+  data:
+  log:
 
+networks:
+  mqtt-network:
