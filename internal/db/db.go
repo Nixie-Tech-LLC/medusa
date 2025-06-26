@@ -271,16 +271,16 @@ func CreateContent(
 	INSERT INTO content
 	(name, type, url, default_duration, created_by, created_at, updated_at)
 	VALUES
-	($1,   $2,   $3,  $5,              $6,         now(),     now())
+	($1,   $2,   $3,  $4,              $5,         now(),     now())
 	RETURNING
 	id, name, type, url, default_duration, created_at, created_by, updated_at;`
 
 	if err := DB.Get(&c, query,
-		name,             // $1 → name
-		typ,              // $2 → type
-		url,              // $3 → url
-		defaultDuration,  // $5 → default_duration
-		createdBy,        // $6 → created_by
+		name,
+		typ,
+		url,
+		defaultDuration,
+		createdBy,
 		); err != nil {
 		return model.Content{}, err
 	}

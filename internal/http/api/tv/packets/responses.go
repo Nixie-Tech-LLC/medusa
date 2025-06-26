@@ -1,6 +1,5 @@
 package packets
 
-import "encoding/json"
 // RESPONSES FOR /api/tv/screens/*
 
 // screenResponse mirrors model.Screen but flattens times to RFC3339
@@ -19,7 +18,6 @@ type ContentResponse struct {
 	Name      		string 	`json:"name"`
 	Type      		string 	`json:"type"`
 	URL       		string 	`json:"url"`
-	Metadata 		json.RawMessage `json:"metadata"`
 	DefaultDuration int 	`json:"default_duration"`
 	UpdatedAt 		string 	`json:"updated_at"`
 	CreatedAt 		string 	`json:"created_at"`
