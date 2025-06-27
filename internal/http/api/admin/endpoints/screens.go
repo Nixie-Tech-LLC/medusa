@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -80,7 +81,7 @@ func (t *TvController) createScreen(c *gin.Context) {
 		return
 	}
 
-	middleware.InitMQTTClient(request.Name)
+	middleware.CreateMQTTClient(request.Name)
 
 	screen, err := db.CreateScreen(request.Name, request.Location)
 	if err != nil {
@@ -229,13 +230,17 @@ func (t *TvController) assignContentToScreen(c *gin.Context) {
 	if err != nil || screen.DeviceID == nil {
 		return
 	}
-	middleware.SendMessageToScreen(*screen.DeviceID, packets.ContentResponse{
+
+	response, err := json.Marshal(packets.ContentResponse{
 		ID:        content.ID,
 		Name:      content.Name,
 		Type:      content.Type,
 		URL:       content.URL,
 		CreatedAt: content.CreatedAt.String(),
 	})
+	if err == nil {
+		middleware.SendMessageToScreen(*screen.DeviceID, response)
+	}
 
 	c.Status(http.StatusOK)
 }

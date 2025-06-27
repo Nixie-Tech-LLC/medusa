@@ -1,14 +1,12 @@
 package middleware
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	tvpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
@@ -37,7 +35,7 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 }
 
 // Initialize MQTT client
-func InitMQTTClient(clientName string) error {
+func CreateMQTTClient(clientName string) (mqtt.Client, error) {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
 	opts.SetClientID(clientName)
@@ -47,11 +45,11 @@ func InitMQTTClient(clientName string) error {
 
 	mqttClient = mqtt.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
+		return nil, fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
 	}
 
 	log.Println("MQTT client initialized successfully")
-	return nil
+	return mqttClient, nil
 }
 
 // SetBrokerURL allows configuration of the MQTT broker URL
@@ -59,6 +57,7 @@ func SetBrokerURL(url string) {
 	brokerURL = url
 }
 
+// TODO: Poll the broker to send messages to the screen on an interval in order to update the tv when it is turned on and off
 // TVWebSocket is now an MQTT-based handler for TV device connections
 func TVWebSocket() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -75,18 +74,9 @@ func TVWebSocket() gin.HandlerFunc {
 		}
 
 		// Create MQTT client for this TV device
-		opts := mqtt.NewClientOptions()
-		opts.AddBroker(brokerURL)
-		opts.SetClientID(fmt.Sprintf("tv-%s", request.DeviceID))
-		opts.SetDefaultPublishHandler(messagePubHandler)
-		opts.OnConnect = connectHandler
-		opts.OnConnectionLost = connectLostHandler
-
-		client := mqtt.NewClient(opts)
-		if token := client.Connect(); token.Wait() && token.Error() != nil {
-			log.Printf("Failed to connect TV device %s to MQTT: %v", request.DeviceID, token.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to MQTT broker"})
-			return
+		client, err := CreateMQTTClient(fmt.Sprintf("tv-%s", request.DeviceID))
+		if err != nil {
+			log.Printf("Failed to connect TV device %s to MQTT: %v", request.DeviceID, err)
 		}
 
 		// Subscribe to device-specific topic
@@ -106,11 +96,7 @@ func TVWebSocket() gin.HandlerFunc {
 		log.Printf("MQTT connected: screen %d (device: %s)", screen.ID, request.DeviceID)
 
 		// Send connection success response
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "connected",
-			"device_id": request.DeviceID,
-			"topic":     topic,
-		})
+		c.JSON(http.StatusOK, gin.H{"success": "device connected successsfully"})
 
 		// Keep the connection alive (this is now handled by MQTT client)
 		// The client will automatically reconnect if connection is lost
@@ -118,7 +104,7 @@ func TVWebSocket() gin.HandlerFunc {
 }
 
 // SendMessageToScreen sends a message to a specific TV screen via MQTT
-func SendMessageToScreen(deviceID string, message adminpackets.ContentResponse) error {
+func SendMessageToScreen(deviceID string, message []byte) error {
 	clientMutex.RLock()
 	client, exists := tvClients[deviceID]
 	clientMutex.RUnlock()
@@ -126,11 +112,7 @@ func SendMessageToScreen(deviceID string, message adminpackets.ContentResponse) 
 		return fmt.Errorf("TV device %s not connected", deviceID)
 	}
 	topic := fmt.Sprintf("tv/%s/commands", deviceID)
-	payload, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %v", err)
-	}
-	token := client.Publish(topic, 1, false, payload)
+	token := client.Publish(topic, 1, false, message)
 	token.Wait()
 
 	if token.Error() != nil {

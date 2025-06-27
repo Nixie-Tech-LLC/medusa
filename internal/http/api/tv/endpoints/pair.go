@@ -13,7 +13,7 @@ import (
 
 func RegisterPairingRoutes(r gin.IRoutes) {
 	r.POST("/pair", requestPairing)
-	r.GET("/socket", middleware.TVWebSocket())
+	r.POST("/socket", middleware.TVWebSocket())
 }
 
 func requestPairing(c *gin.Context) {
@@ -28,11 +28,7 @@ func requestPairing(c *gin.Context) {
 	code := generatePairCode()
 	key := code
 
-	err := redisclient.Rdb.Set(c, key, request.DeviceID, 5*time.Minute).Err()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "internal error"})
-		return
-	}
+	redisclient.Set(c, key, request.DeviceID, 5*time.Minute)
 
 	c.JSON(200, gin.H{"code": code})
 }
