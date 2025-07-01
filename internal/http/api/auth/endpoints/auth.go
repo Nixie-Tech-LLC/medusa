@@ -26,6 +26,11 @@ func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 
 	r.POST("/auth/signup", ctl.userSignup)
 	r.POST("/auth/login", ctl.userLogin)
+}
+
+func RegisterSessionRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
+	ctl := accountManagementController(jwtSecret, store) 
+
 	r.GET("/auth/current_profile", ctl.getCurrentProfile)
 	r.PUT("/auth/current_profile", ctl.updateCurrentProfile)
 }

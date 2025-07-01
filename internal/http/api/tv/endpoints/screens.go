@@ -55,7 +55,7 @@ func (t *TvController) listScreens(c *gin.Context) {
         return
     }
 
-    var out []packets.ScreenResponse
+	out := make([]packets.ScreenResponse, 0, len(all))
     for _, s := range all {
         if s.CreatedBy != user.ID {
             continue

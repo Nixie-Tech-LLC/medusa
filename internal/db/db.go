@@ -28,6 +28,7 @@ func Init(databaseURL string) error {
 	return nil
 }
 
+
 // finds all “*.up.sql” files in migrationsPath (sorted by name)
 // and executes their SQL contents in order. It ignores “*.down.sql” files.
 // returns that error immediately upon execution failure
@@ -273,7 +274,7 @@ func CreateContent(
 	VALUES
 	($1,   $2,   $3,  $4,              $5,         now(),     now())
 	RETURNING
-	id, name, type, url, default_duration, created_at, created_by, updated_at;`
+	id, name, type, url, default_duration, created_by, created_at,  updated_at;`
 
 	if err := DB.Get(&c, query,
 		name,

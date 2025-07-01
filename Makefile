@@ -1,47 +1,24 @@
-BINARY         := server
-CMD_DIR        := cmd/server
-IMAGE_NAME     := medusa:local
-CONTAINER_NAME := medusa
-ENV_FILE       := .env
-PORT           := 8080
-
 .PHONY: all
-all: build
+all: rerun 
 
-.PHONY: build
 build:
-	@go mod tidy
-	@go build -o $(BINARY) $(CMD_DIR)
+	@docker compose down
+	@docker compose build
 
-.PHONY: run
-run: build
-	@./$(BINARY)
+run:
+	@docker compose down
+	@docker compose up --build -d 
 
-.PHONY: clean
-clean:
-	@rm -f $(BINARY)
+rebuild:
+	@docker compose down
+	@docker compose build --no-cache 
 
-.PHONY: docker-build
-docker-build:
-	@docker build -t $(IMAGE_NAME) .
+rerun: 
+	@echo "tearing down containers"
+	@docker compose down
+	@echo "rebuilding docker image"
+	@docker compose build --no-cache 
+	@echo "running docker containers"
+	@docker compose up -d
 
-.PHONY: docker-stop
-docker-stop:
-	-@docker stop $(CONTAINER_NAME) 2>/dev/null || true
-
-.PHONY: docker-rm
-docker-rm:
-	-@docker rm $(CONTAINER_NAME) 2>/dev/null || true
-
-.PHONY: docker-run
-docker-run: docker-build docker-stop docker-rm
-	docker run --network host \
-		--name $(CONTAINER_NAME) \
-		--env-file $(ENV_FILE) \
-		$(IMAGE_NAME)
-	@echo "Container '$(CONTAINER_NAME)' started (host-network)."
-
-.PHONY: docker-logs
-docker-logs:
-	@docker logs -f $(CONTAINER_NAME)
 

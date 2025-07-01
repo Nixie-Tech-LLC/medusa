@@ -11,7 +11,9 @@ import (
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
+	"github.com/Nixie-Tech-LLC/medusa/internal/model"
+
 )
 
 type ContentController struct {
@@ -25,26 +27,21 @@ func NewContentController(store db.Store) *ContentController {
 func RegisterContentRoutes(router gin.IRoutes, store db.Store) {
 	ctl := NewContentController(store)
 	// require auth for all:
-	router.GET("/content", ctl.listContent)
-	router.POST("/content", ctl.createContent)
-	router.GET("/content/:id", ctl.getContent)
-	router.PUT("/content/:id", ctl.updateContent)
-	router.DELETE("/content/:id", ctl.deleteContent)
+	router.GET("/content/:id", 		api.ResolveEndpoint(ctl.getContent))
+	router.GET("/content", 			api.ResolveEndpoint(ctl.listContent))
+	router.POST("/content", 		api.ResolveEndpoint(ctl.createContent))
+	router.PUT("/content/:id", 		api.ResolveEndpoint(ctl.updateContent))
+	router.DELETE("/content/:id", 	api.ResolveEndpoint(ctl.deleteContent))
 }
 
-func (c *ContentController) listContent(ctx *gin.Context) {
-	user, ok := middleware.GetCurrentUser(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
+func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error){
 	all, err := c.store.ListContent()
 	if err != nil {
-    	log.Printf("[content] listContent DB error: %v", err)
+		log.Printf("[content] listContent DB error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not list content"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}
+
 
 	// only return content owned by this user
 	out := make([]packets.ContentResponse, 0, len(all))
@@ -61,54 +58,41 @@ func (c *ContentController) listContent(ctx *gin.Context) {
 		})
 	}
 
-	ctx.JSON(http.StatusOK, out)
+	return out, nil
 }
 
-func (c *ContentController) getContent(ctx *gin.Context) {
-	user, ok := middleware.GetCurrentUser(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
+func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
 	x, err := c.store.GetContentByID(id)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		return
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "not found"}
 	}
 
 	if x.CreatedBy != user.ID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
+		log.Printf("[content] getContent: %v <==> %v", x.CreatedBy, user.ID)
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
-	ctx.JSON(http.StatusOK, packets.ContentResponse{
+	resp := packets.ContentResponse{
 		ID:        x.ID,
 		Name:      x.Name,
 		Type:      x.Type,
 		URL:       x.URL,
 		CreatedAt: x.CreatedAt.Format(time.RFC3339),
-	})
-}
-
-func (c *ContentController) createContent(ctx *gin.Context) {
-	user, ok := middleware.GetCurrentUser(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
 	}
 
+	return resp, nil
+}
+
+func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	var req packets.CreateContentRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		log.Printf("[content] CreateContent failed: %v", err)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}
 
 	content, err := c.store.CreateContent(
@@ -117,21 +101,17 @@ func (c *ContentController) createContent(ctx *gin.Context) {
 		req.URL,
 		req.DefaultDuration,
 		user.ID,
-		)
+	)
 
 	if err != nil {
 		log.Printf("[content] CreateContent failed: %v", err)
-
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not create content"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "could not create content"}
 	}
 
 	if req.ScreenID != nil {
 		if err := c.store.AssignContentToScreen(*req.ScreenID, content.ID); err != nil {
 			log.Printf("[content] CreateContent failed: %v", err)
-
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not assign content"})
-			return
+			return nil, &api.Error{Code: http.StatusForbidden, Message: "could not assign content"}
 		}
 		go func(screenID int) {
 			screen, err := c.store.GetScreenByID(screenID)
@@ -142,46 +122,37 @@ func (c *ContentController) createContent(ctx *gin.Context) {
 		}(*req.ScreenID)
 	}
 
-	ctx.JSON(http.StatusCreated, packets.ContentResponse{
+	resp := packets.ContentResponse{
 		ID:        content.ID,
 		Name:      content.Name,
 		Type:      content.Type,
 		URL:       content.URL,
 		CreatedAt: content.CreatedAt.Format(time.RFC3339),
-	})
+	}
+
+	return resp, nil
 }
 
 // updateContent handles PUT /content/:id
-func (c *ContentController) updateContent(ctx *gin.Context) {
-	user, ok := middleware.GetCurrentUser(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	idParam := ctx.Param("id")
-	contentID, err := strconv.Atoi(idParam)
+func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	contentID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid content id"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "invalid content id"}
 	}
 
 	// verify ownership
 	existing, err := c.store.GetContentByID(contentID)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "not found"}
 	}
 	if existing.CreatedBy != user.ID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
 	var req packets.UpdateContentRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}
 
 	if err := c.store.UpdateContent(
@@ -189,45 +160,34 @@ func (c *ContentController) updateContent(ctx *gin.Context) {
 		req.Name,
 		req.URL,
 		req.DefaultDuration,
-		); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	); err != nil {
+		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}
 
-	ctx.Status(http.StatusNoContent)
+	// no response body
+	return nil, nil
 }
 
 // deleteContent handles DELETE /content/:id
-func (c *ContentController) deleteContent(ctx *gin.Context) {
-	user, ok := middleware.GetCurrentUser(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	idParam := ctx.Param("id")
-	contentID, err := strconv.Atoi(idParam)
+func (c *ContentController) deleteContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	contentID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid content id"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "invalid content id"}
 	}
 
 	// verify ownership
 	existing, err := c.store.GetContentByID(contentID)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "not found"}
 	}
 	if existing.CreatedBy != user.ID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
 	if err := c.store.DeleteContent(contentID); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}
 
-	ctx.Status(http.StatusNoContent)
+	return nil, nil
 }
 

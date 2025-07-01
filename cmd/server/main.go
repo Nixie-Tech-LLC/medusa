@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/gin-contrib/cors"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
 	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
@@ -42,7 +43,15 @@ func main() {
 
 	// set up gin router
 	r := gin.Default()
-	
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"}, // your frontend origin
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
 	sqlxDB, err := sqlx.Connect("postgres", databaseUrl)
 
 	if err != nil {
@@ -52,9 +61,10 @@ func main() {
 	redisclient.InitRedis()
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
-
-	// pass JWTSecret so auth handlers can issue tokens
 	authapi.RegisterAuthRoutes(admin, secretKey, store)
+	// register middleware AFTER registering signin/signup routes
+	admin.Use(middleware.JWTMiddleware(secretKey))
+	authapi.RegisterSessionRoutes(admin, secretKey, store)
 
 	protected := admin.Group("/")
 	protected.Use(middleware.JWTMiddleware(secretKey))
