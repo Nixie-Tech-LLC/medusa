@@ -42,7 +42,6 @@ func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}
 
-
 	// only return content owned by this user
 	out := make([]packets.ContentResponse, 0, len(all))
 	for _, x := range all {

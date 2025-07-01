@@ -7,8 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
+	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 )
 
 type AccountManager struct {
@@ -20,131 +22,108 @@ func accountManagementController(secret string, store db.Store) *AccountManager 
 	return &AccountManager{jwtSecret: secret, store: store}
 }
 
-// mounts auth‐related routes under /api/admin/auth
+// mounts auth-related routes under /api/admin/auth
 func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 	ctl := accountManagementController(jwtSecret, store)
 
-	r.POST("/auth/signup", ctl.userSignup)
-	r.POST("/auth/login", ctl.userLogin)
+	r.POST("/auth/signup", api.ResolveEndpoint(ctl.userSignup))
+	r.POST("/auth/login", api.ResolveEndpoint(ctl.userLogin))
 }
 
 func RegisterSessionRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
-	ctl := accountManagementController(jwtSecret, store) 
+	ctl := accountManagementController(jwtSecret, store)
 
-	r.GET("/auth/current_profile", ctl.getCurrentProfile)
-	r.PUT("/auth/current_profile", ctl.updateCurrentProfile)
+	r.GET("/auth/current_profile", api.ResolveEndpoint(ctl.getCurrentProfile))
+	r.PUT("/auth/current_profile", api.ResolveEndpoint(ctl.updateCurrentProfile))
 }
 
 // POST /api/admin/auth/signup
-func (a *AccountManager) userSignup(c *gin.Context) {
+func (a *AccountManager) userSignup(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	var request packets.SignupRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
 	if existing, _ := a.store.GetUserByEmail(request.Email); existing != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
-		return
+		return nil, &api.Error{Code: http.StatusConflict, Message: "email already registered"}
 	}
 
 	hashed, err := middleware.HashPassword(request.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not hash password"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not hash password"}
 	}
 
 	userID, err := a.store.CreateUser(request.Email, hashed, request.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create user"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create user"}
 	}
 
 	token, err := middleware.GenerateJWT(userID, a.jwtSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not generate token"}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"token": token})
+	return gin.H{"token": token}, nil
 }
 
 // POST /api/admin/auth/login
-func (a *AccountManager) userLogin(c *gin.Context) {
+func (a *AccountManager) userLogin(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	var request packets.LoginRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	user, err := a.store.GetUserByEmail(request.Email)
-	if err != nil || !middleware.CheckPassword(user.HashedPassword, request.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
+	foundUser, err := a.store.GetUserByEmail(request.Email)
+	if err != nil || !middleware.CheckPassword(foundUser.HashedPassword, request.Password) {
+		return nil, &api.Error{Code: http.StatusUnauthorized, Message: "invalid credentials"}
 	}
 
-	token, err := middleware.GenerateJWT(user.ID, a.jwtSecret)
+	token, err := middleware.GenerateJWT(foundUser.ID, a.jwtSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not generate token"}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	return gin.H{"token": token}, nil
 }
 
 // GET /api/admin/auth/current_profile
-func (a *AccountManager) getCurrentProfile(c *gin.Context) {
-	currentUser, ok := middleware.GetCurrentUser(c)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
-		return
-	}
-	c.JSON(http.StatusOK, packets.ProfileResponse{
-		ID:        currentUser.ID,
-		Email:     currentUser.Email,
-		Name:      currentUser.Name,
-		CreatedAt: currentUser.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: currentUser.UpdatedAt.Format(time.RFC3339),
-	})
+func (a *AccountManager) getCurrentProfile(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	return packets.ProfileResponse{
+		ID:        user.ID,
+		Email:     user.Email,
+		Name:      user.Name,
+		CreatedAt: user.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
+	}, nil
 }
 
 // PATCH /api/admin/auth/current_profile
-func (a *AccountManager) updateCurrentProfile(c *gin.Context) {
-	currentUser, ok := middleware.GetCurrentUser(c)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve user from context"})
-		return
-	}
-
+func (a *AccountManager) updateCurrentProfile(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	var request packets.UpdateCurrentProfileRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	if request.Email != currentUser.Email {
+	if request.Email != user.Email {
 		if other, _ := a.store.GetUserByEmail(request.Email); other != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
-			return
+			return nil, &api.Error{Code: http.StatusConflict, Message: "email already in use"}
 		}
 	}
 
-	if err := a.store.UpdateUserProfile(currentUser.ID, request.Email, request.Name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update profile"})
-		return
+	if err := a.store.UpdateUserProfile(user.ID, request.Email, request.Name); err != nil {
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not update profile"}
 	}
 
-	updated, err := a.store.GetUserByID(currentUser.ID)
+	updated, err := a.store.GetUserByID(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch updated profile"})
-		return
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not fetch updated profile"}
 	}
 
-	c.JSON(http.StatusOK, packets.ProfileResponse{
+	return packets.ProfileResponse{
 		ID:        updated.ID,
 		Email:     updated.Email,
 		Name:      updated.Name,
 		CreatedAt: updated.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: updated.UpdatedAt.Format(time.RFC3339),
-	})
+	}, nil
 }
