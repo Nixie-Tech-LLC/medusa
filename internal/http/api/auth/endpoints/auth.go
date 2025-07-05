@@ -33,12 +33,12 @@ func RegisterAuthRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 func RegisterSessionRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 	ctl := accountManagementController(jwtSecret, store)
 
-	r.GET("/auth/current_profile", api.ResolveEndpoint(ctl.getCurrentProfile))
-	r.PUT("/auth/current_profile", api.ResolveEndpoint(ctl.updateCurrentProfile))
+	r.GET("/auth/current_profile", api.ResolveEndpointWithAuth(ctl.getCurrentProfile))
+	r.PUT("/auth/current_profile", api.ResolveEndpointWithAuth(ctl.updateCurrentProfile))
 }
 
 // POST /api/admin/auth/signup
-func (a *AccountManager) userSignup(ctx *gin.Context, user *model.User) (any, *api.Error) {
+func (a *AccountManager) userSignup(ctx *gin.Context) (any, *api.Error) {
 	var request packets.SignupRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
@@ -67,7 +67,7 @@ func (a *AccountManager) userSignup(ctx *gin.Context, user *model.User) (any, *a
 }
 
 // POST /api/admin/auth/login
-func (a *AccountManager) userLogin(ctx *gin.Context, user *model.User) (any, *api.Error) {
+func (a *AccountManager) userLogin(ctx *gin.Context) (any, *api.Error) {
 	var request packets.LoginRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}

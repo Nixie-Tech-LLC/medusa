@@ -2,7 +2,6 @@ package api
 
 
 import (
-	"log"
 	"github.com/gin-gonic/gin"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
@@ -15,9 +14,10 @@ type Error struct {
 }
 
 
-type HandlerFunc func(ctx *gin.Context, user *model.User) (any, *Error)
+type HandlerFuncWithAuth func(ctx *gin.Context, user *model.User) (any, *Error)
+type HandlerFunc func(ctx *gin.Context) (any, *Error)
 
-func ResolveEndpoint (h HandlerFunc) gin.HandlerFunc { 
+func ResolveEndpointWithAuth (h HandlerFuncWithAuth) gin.HandlerFunc { 
 	return func(ctx *gin.Context) {
 		user, ok := middleware.GetCurrentUser(ctx)
 		if !ok {
@@ -31,8 +31,19 @@ func ResolveEndpoint (h HandlerFunc) gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("[CONTENT] LISTCONTENT NEW ENDPOINT WORKING")
+		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+func ResolveEndpoint (h HandlerFunc) gin.HandlerFunc { 
+	return func(ctx *gin.Context) {
+		result, error := h(ctx)
+		if error != nil {
+			ctx.JSON(error.Code, gin.H{"error": error.Message})
+			return
+		}
 
 		ctx.JSON(http.StatusOK, result)
 	}
 }
+

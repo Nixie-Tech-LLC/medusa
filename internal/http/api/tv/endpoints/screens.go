@@ -26,21 +26,21 @@ func NewTvController(store db.Store) *TvController {
 func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 	ctl := NewTvController(store)
 	// all admin screens routes require a valid admin JWT
-	r.GET("/screens", 			api.ResolveEndpoint(ctl.listScreens))
-	r.POST("/screens", 			api.ResolveEndpoint(ctl.createScreen))
-	r.GET("/screens/:id", 		api.ResolveEndpoint(ctl.getScreen))
-	r.PUT("/screens/:id", 		api.ResolveEndpoint(ctl.updateScreen))
-	r.DELETE("/screens/:id", 	api.ResolveEndpoint(ctl.deleteScreen))
+	r.GET("/screens", 			api.ResolveEndpointWithAuth(ctl.listScreens))
+	r.POST("/screens", 			api.ResolveEndpointWithAuth(ctl.createScreen))
+	r.GET("/screens/:id", 		api.ResolveEndpointWithAuth(ctl.getScreen))
+	r.PUT("/screens/:id", 		api.ResolveEndpointWithAuth(ctl.updateScreen))
+	r.DELETE("/screens/:id", 	api.ResolveEndpointWithAuth(ctl.deleteScreen))
 
 	// screen <-> content
-	r.GET("/screens/:id/content", 	api.ResolveEndpoint(ctl.getContentForScreen))
-	r.POST("/screens/:id/content", 	api.ResolveEndpoint(ctl.assignContentToScreen))
+	r.GET("/screens/:id/content", 	api.ResolveEndpointWithAuth(ctl.getContentForScreen))
+	r.POST("/screens/:id/content", 	api.ResolveEndpointWithAuth(ctl.assignContentToScreen))
 
 	// pairing
-	r.POST("/screens/pair", api.ResolveEndpoint(ctl.pairScreen))
+	r.POST("/screens/pair", api.ResolveEndpointWithAuth(ctl.pairScreen))
 
 	// assignment
-	r.POST("/screens/:id/assign", api.ResolveEndpoint(ctl.assignScreenToUser))
+	r.POST("/screens/:id/assign", api.ResolveEndpointWithAuth(ctl.assignScreenToUser))
 }
 
 // GET /api/admin/screens

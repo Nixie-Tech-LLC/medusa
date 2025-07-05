@@ -27,11 +27,11 @@ func NewContentController(store db.Store) *ContentController {
 func RegisterContentRoutes(router gin.IRoutes, store db.Store) {
 	ctl := NewContentController(store)
 	// require auth for all:
-	router.GET("/content/:id", 		api.ResolveEndpoint(ctl.getContent))
-	router.GET("/content", 			api.ResolveEndpoint(ctl.listContent))
-	router.POST("/content", 		api.ResolveEndpoint(ctl.createContent))
-	router.PUT("/content/:id", 		api.ResolveEndpoint(ctl.updateContent))
-	router.DELETE("/content/:id", 	api.ResolveEndpoint(ctl.deleteContent))
+	router.GET("/content/:id", 		api.ResolveEndpointWithAuth(ctl.getContent))
+	router.GET("/content", 			api.ResolveEndpointWithAuth(ctl.listContent))
+	router.POST("/content", 		api.ResolveEndpointWithAuth(ctl.createContent))
+	router.PUT("/content/:id", 		api.ResolveEndpointWithAuth(ctl.updateContent))
+	router.DELETE("/content/:id", 	api.ResolveEndpointWithAuth(ctl.deleteContent))
 }
 
 func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error){
