@@ -1,4 +1,4 @@
-package redisclient
+package redis
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func InitRedis() {
 
 func Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	if err := Rdb.Set(ctx, key, value, expiration); err != nil {
-		log.Printf("failed to add %s to redis: %v", key, err)
+		log.Printf("Failed to add %s to redis: %v", key, err)
 		return
 	}
 }

@@ -14,6 +14,11 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 )
 
+/*
+  TODO: Handle errors inside getter and setter functions
+    so try catch isn't necessary for each usage
+*/
+
 var (
 	DB *sqlx.DB
 )
@@ -160,11 +165,14 @@ func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 
 func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 	var isPaired bool
-	err := DB.Get(isPaired, `
+	err := DB.Get(&isPaired, `
 		SELECT paired
 		FROM screens
 		WHERE device_id = $1
 	`, deviceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
 	return isPaired, err
 }
 

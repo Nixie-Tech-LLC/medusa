@@ -1,6 +1,6 @@
 package packets
 
-// Request for creating new content; optional ScreenID to immediately show.
+// CreateContentRequest Request for creating new content; optional ScreenID to immediately show.
 type CreateContentRequest struct {
 	Name     string `json:"name"  binding:"required"`
 	Type     string `json:"type"  binding:"required"`
@@ -8,7 +8,7 @@ type CreateContentRequest struct {
 	ScreenID *int   `json:"screen_id"`
 }
 
-// REQUESTS FOR /api/tv/screens/*
+// CreateScreenRequest REQUESTS FOR /api/tv/screens/*
 type CreateScreenRequest struct {
 	Name     string  `json:"name" binding:"required"`
 	Location *string `json:"location"`
