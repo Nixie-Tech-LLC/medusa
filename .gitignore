@@ -1,6 +1,7 @@
 *.env
 
 rebuild-containers.ps1
+docker-rebuild.sh
 
 /data/*
 /tmp/*

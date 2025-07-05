@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
-	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
 type TvController struct {
@@ -80,7 +81,10 @@ func (t *TvController) createScreen(c *gin.Context) {
 		return
 	}
 
-	middleware.InitMQTTClient(request.Name)
+	_, err := middleware.CreateMQTTClient(request.Name)
+	if err != nil {
+		return
+	}
 
 	screen, err := db.CreateScreen(request.Name, request.Location)
 	if err != nil {
@@ -90,6 +94,7 @@ func (t *TvController) createScreen(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, packets.ScreenResponse{
 		ID:        screen.ID,
+		DeviceID:  screen.DeviceID,
 		Name:      screen.Name,
 		Location:  screen.Location,
 		Paired:    screen.Paired,
@@ -229,13 +234,20 @@ func (t *TvController) assignContentToScreen(c *gin.Context) {
 	if err != nil || screen.DeviceID == nil {
 		return
 	}
-	middleware.SendMessageToScreen(*screen.DeviceID, packets.ContentResponse{
+
+	response, err := json.Marshal(packets.ContentResponse{
 		ID:        content.ID,
 		Name:      content.Name,
 		Type:      content.Type,
 		URL:       content.URL,
 		CreatedAt: content.CreatedAt.String(),
 	})
+	if err == nil {
+		err := middleware.SendMessageToScreen(*screen.DeviceID, response)
+		if err != nil {
+			return
+		}
+	}
 
 	c.Status(http.StatusOK)
 }
@@ -255,12 +267,12 @@ func (t *TvController) pairScreen(c *gin.Context) {
 	key := request.PairingCode
 
 	// Pull the deviceID from Redis using the pairing code
-	deviceID, err := redisclient.Rdb.Get(c, key).Result()
+	deviceID, err := redis.Rdb.Get(c, key).Result()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not find deviceID for pairing code"})
 		return
 	}
-	redisclient.Rdb.Del(c, key)
+	redis.Rdb.Del(c, key)
 
 	// Assign the deviceID to the screen in Postgres
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {

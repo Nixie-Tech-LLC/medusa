@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS screens (
   id SERIAL PRIMARY KEY,
-  device_id TEXT NOT NULL UNIQUE,
+  device_id TEXT UNIQUE,
   name TEXT NOT NULL,
   location TEXT,
   paired BOOLEAN NOT NULL DEFAULT false,
