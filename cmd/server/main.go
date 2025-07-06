@@ -5,15 +5,15 @@ import (
 	"os"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	"github.com/gin-contrib/cors"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
 	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -53,18 +53,6 @@ func main() {
 
 	// set up gin router
 	r := gin.Default()
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"}, // your frontend origin
