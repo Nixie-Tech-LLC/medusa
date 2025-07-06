@@ -4,3 +4,6 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS screen_assignments;
 DROP TABLE IF EXISTS content;
 DROP TABLE IF EXISTS screen_contents;
+DROP TABLE IF EXISTS playlists;
+DROP TABLE IF EXISTS playlist_items;
+DROP TABLE IF EXISTS screen_playlists;

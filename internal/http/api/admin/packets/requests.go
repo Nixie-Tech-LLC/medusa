@@ -5,10 +5,10 @@ type CreateContentRequest struct {
 	Name     string `json:"name"  binding:"required"`
 	Type     string `json:"type"  binding:"required"`
 	URL      string `json:"url"   binding:"required,url"`
+	DefaultDuration int `json:"default_duration" binding:"required"`
 	ScreenID *int   `json:"screen_id"`
 }
 
-// CreateScreenRequest REQUESTS FOR /api/tv/screens/*
 type CreateScreenRequest struct {
 	Name     string  `json:"name" binding:"required"`
 	Location *string `json:"location"`
@@ -31,3 +31,11 @@ type PairScreenRequest struct {
 	PairingCode string `json:"code" binding:"required"`
 	ScreenID    int    `json:"screen_id" binding:"required"`
 }
+
+type UpdateContentRequest struct {
+    Name            *string         `json:"name"`
+    Type            *string         `json:"type"`
+    URL             *string         `json:"url"`
+    DefaultDuration *int            `json:"default_duration"`
+}
+
