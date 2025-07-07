@@ -35,6 +35,7 @@ func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
+// works fine
 func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (any, *api.Error) {
     all, err := p.store.ListPlaylists()
     if err != nil {
@@ -67,10 +68,13 @@ func (p *PlaylistController) createPlaylist(ctx *gin.Context, user *model.User) 
 
     // reload to include items (initially empty)
     full, _ := p.store.GetPlaylistByID(pl.ID)
-    return mapPlaylist(full), nil
+	return mapPlaylist(full), nil // TODO: playlist not added to db during testing, 204 response + empty get playlists
+	// ruled out frontend issue, db insert error, or backend error checks.
+	// could be migration stuff, db build or setup but unlikely idk
 }
 
 // getPlaylist fetches a single playlist by ID and checks ownership.
+// TODO: simple test
 func (p *PlaylistController) getPlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     id, _ := strconv.Atoi(ctx.Param("id"))
     pl, err := p.store.GetPlaylistByID(id)
@@ -84,6 +88,7 @@ func (p *PlaylistController) getPlaylist(ctx *gin.Context, user *model.User) (an
 }
 
 // updatePlaylist applies changes to an existing playlist after ownership check.
+// TODO: simple test
 func (p *PlaylistController) updatePlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     id, _ := strconv.Atoi(ctx.Param("id"))
     existing, err := p.store.GetPlaylistByID(id)
@@ -106,6 +111,7 @@ func (p *PlaylistController) updatePlaylist(ctx *gin.Context, user *model.User) 
 }
 
 // deletePlaylist removes a playlist after verifying user ownership.
+// TODO: simple test
 func (p *PlaylistController) deletePlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     id, _ := strconv.Atoi(ctx.Param("id"))
     pl, err := p.store.GetPlaylistByID(id)
@@ -119,6 +125,7 @@ func (p *PlaylistController) deletePlaylist(ctx *gin.Context, user *model.User) 
 }
 
 // addItem inserts a new item into a playlist at the specified position.
+// TODO: simple test
 func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *api.Error) {
     pid, _ := strconv.Atoi(ctx.Param("id"))
     pl, err := p.store.GetPlaylistByID(pid)
@@ -145,6 +152,7 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 }
 
 // updateItem changes position or duration of an existing playlist item.
+// TODO: simple test
 func (p *PlaylistController) updateItem(ctx *gin.Context, user *model.User) (any, *api.Error) {
     pid, _ := strconv.Atoi(ctx.Param("id"))
     pl, _ := p.store.GetPlaylistByID(pid)
@@ -164,6 +172,7 @@ func (p *PlaylistController) updateItem(ctx *gin.Context, user *model.User) (any
 }
 
 // removeItem deletes an item from a playlist.
+// TODO: simple test
 func (p *PlaylistController) removeItem(ctx *gin.Context, user *model.User) (any, *api.Error) {
     pid, _ := strconv.Atoi(ctx.Param("id"))
     pl, _ := p.store.GetPlaylistByID(pid)
