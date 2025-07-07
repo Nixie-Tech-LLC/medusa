@@ -53,19 +53,7 @@ func main() {
 
 	// set up gin router
 	r := gin.Default()
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
-
+	r.Static("/uploads", "./uploads")
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"}, // your frontend origin
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -92,8 +80,9 @@ func main() {
 	protected.Use(middleware.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
 	adminapi.RegisterContentRoutes(protected, store)
-	adminapi.RegisterScheduleRoutes(protected)
 	adminapi.RegisterScreenRoutes(protected, store)
+	adminapi.RegisterScheduleRoutes(protected)
+	adminapi.RegisterPlaylistRoutes(protected, store)
 
 	tv := r.Group("/api/tv")
 	tvapi.RegisterPairingRoutes(tv, store)
