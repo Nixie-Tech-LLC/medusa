@@ -10,6 +10,6 @@ type Screen struct {
 	Location  *string   `db:"location"     json:"location"`
 	Paired    bool      `db:"paired"       json:"paired"`
 	CreatedAt time.Time `db:"created_at"   json:"created_at"`
-    CreatedBy       int             `db:"created_by"   json:"created_by"`
+	CreatedBy int       `db:"created_by"   json:"created_by"`
 	UpdatedAt time.Time `db:"updated_at"   json:"updated_at"`
 }

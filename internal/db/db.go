@@ -33,7 +33,6 @@ func Init(databaseURL string) error {
 	return nil
 }
 
-
 // finds all “*.up.sql” files in migrationsPath (sorted by name)
 // and executes their SQL contents in order. It ignores “*.down.sql” files.
 // returns that error immediately upon execution failure
@@ -147,7 +146,7 @@ func UpdateUserProfile(id int, email string, name *string) error {
 func GetScreenByID(id int) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_at, updated_at
+		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
 		FROM screens
 		WHERE id = $1
 		`, id)
@@ -180,7 +179,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
-		SELECT id, device_id, name, location, paired, created_at, updated_at
+		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
 		FROM screens
 		ORDER BY id
 		`)
@@ -190,8 +189,8 @@ func ListScreens() ([]model.Screen, error) {
 func CreateScreen(name string, location *string, createdBy int) (model.Screen, error) {
 	var s model.Screen
 	q := `
-	INSERT INTO screens (device_id, name, location, paired, created_by, created_at, updated_at)
-	VALUES (gen_random_uuid()::text, $1, $2, false, $3, now(), now())
+	INSERT INTO screens (name, location, paired, created_by, created_at, updated_at)
+	VALUES ($1, $2, false, $3, now(), now())
 	RETURNING id, device_id, name, location, paired, created_by, created_at, updated_at;`
 	if err := DB.Get(&s, q, name, location, createdBy); err != nil {
 		return model.Screen{}, err
@@ -290,7 +289,7 @@ func CreateContent(
 		url,
 		defaultDuration,
 		createdBy,
-		); err != nil {
+	); err != nil {
 		return model.Content{}, err
 	}
 	return c, nil
@@ -300,7 +299,7 @@ func GetContentByID(id int) (model.Content, error) {
 	var c model.Content
 	query := `
 	SELECT
-	id, name, type, url, default_duration, created_at, updated_at
+	id, name, type, url, default_duration, created_by, created_at, updated_at
 	FROM content
 	WHERE id = $1;`
 
@@ -312,8 +311,8 @@ func GetContentByID(id int) (model.Content, error) {
 }
 
 func ListContent() ([]model.Content, error) {
-  var all []model.Content
-  query := `
+	var all []model.Content
+	query := `
   SELECT
     id,
     name,
@@ -326,12 +325,11 @@ func ListContent() ([]model.Content, error) {
   FROM content
   ORDER BY id;
   `
-  if err := DB.Select(&all, query); err != nil {
-    return nil, err
-  }
-  return all, nil
+	if err := DB.Select(&all, query); err != nil {
+		return nil, err
+	}
+	return all, nil
 }
-
 
 func UpdateContent(
 	id int,
@@ -347,7 +345,7 @@ func UpdateContent(
 		updated_at       = now()
 		WHERE id = $1;`,
 		id, name, url, defaultDuration,
-		)
+	)
 	return err
 }
 
@@ -418,7 +416,7 @@ func UpdatePlaylist(
 		updated_at  = now()
 		WHERE id = $1;`,
 		id, name, description,
-		)
+	)
 	return err
 }
 
@@ -441,7 +439,7 @@ func AddItemToPlaylist(
 
 	if err := DB.Get(&it, query,
 		playlistID, contentID, position, duration,
-		); err != nil {
+	); err != nil {
 		return model.PlaylistItem{}, err
 	}
 	return it, nil
@@ -459,7 +457,7 @@ func UpdatePlaylistItem(
 		duration = COALESCE($3, duration)
 		WHERE id = $1;`,
 		itemID, position, duration,
-		)
+	)
 	return err
 }
 
@@ -493,7 +491,7 @@ func AssignPlaylistToScreen(screenID, playlistID int) error {
 		active      = true,
 		assigned_at = now();`,
 		screenID, playlistID,
-		)
+	)
 	return err
 }
 
@@ -503,7 +501,7 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 		SELECT playlist_id FROM screen_playlists
 		WHERE screen_id = $1 AND active = true;`,
 		screenID,
-		)
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Playlist{}, sql.ErrNoRows

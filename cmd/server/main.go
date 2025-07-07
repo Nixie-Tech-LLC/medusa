@@ -9,7 +9,7 @@ import (
 	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
-	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
@@ -55,11 +55,14 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"}, // your frontend origin
+		AllowOriginFunc: func(origin string) bool {
+			// Allow all origins
+			return true
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 	}))
 
 	sqlxDB, err := sqlx.Connect("postgres", databaseUrl)
@@ -68,7 +71,7 @@ func main() {
 		log.Fatalf("Failed to connect to db via sqlx: %v", err)
 	}
 	store := db.NewStore(sqlxDB)
-	redisclient.InitRedis()
+	redis.InitRedis()
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 	authapi.RegisterAuthRoutes(admin, secretKey, store)

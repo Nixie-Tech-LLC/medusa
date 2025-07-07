@@ -2,6 +2,7 @@ package endpoints
 
 import (
 	"encoding/json"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,11 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
-	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
 type TvController struct {
@@ -27,15 +28,15 @@ func NewTvController(store db.Store) *TvController {
 func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 	ctl := NewTvController(store)
 	// all admin screens routes require a valid admin JWT
-	r.GET("/screens", 			api.ResolveEndpointWithAuth(ctl.listScreens))
-	r.POST("/screens", 			api.ResolveEndpointWithAuth(ctl.createScreen))
-	r.GET("/screens/:id", 		api.ResolveEndpointWithAuth(ctl.getScreen))
-	r.PUT("/screens/:id", 		api.ResolveEndpointWithAuth(ctl.updateScreen))
-	r.DELETE("/screens/:id", 	api.ResolveEndpointWithAuth(ctl.deleteScreen))
+	r.GET("/screens", api.ResolveEndpointWithAuth(ctl.listScreens))
+	r.POST("/screens", api.ResolveEndpointWithAuth(ctl.createScreen))
+	r.GET("/screens/:id", api.ResolveEndpointWithAuth(ctl.getScreen))
+	r.PUT("/screens/:id", api.ResolveEndpointWithAuth(ctl.updateScreen))
+	r.DELETE("/screens/:id", api.ResolveEndpointWithAuth(ctl.deleteScreen))
 
 	// screen <-> content
-	r.GET("/screens/:id/content", 	api.ResolveEndpointWithAuth(ctl.getContentForScreen))
-	r.POST("/screens/:id/content", 	api.ResolveEndpointWithAuth(ctl.assignContentToScreen))
+	r.GET("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.getContentForScreen))
+	r.POST("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.assignContentToScreen))
 
 	// pairing
 	r.POST("/screens/pair", api.ResolveEndpointWithAuth(ctl.pairScreen))
@@ -81,7 +82,6 @@ func (t *TvController) createScreen(ctx *gin.Context, user *model.User) (any, *a
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
-
 
 	screen, err := t.store.CreateScreen(request.Name, request.Location, user.ID)
 	if err != nil {
@@ -245,6 +245,7 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 	}
 	if existingScreen.CreatedBy != user.ID {
+		log.Error().Int("current user", user.ID).Int("screen owner", existingScreen.CreatedBy).Msg("The screen was not created by the user")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
@@ -296,13 +297,13 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Er
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	// Assign the deviceID to the screen in Postgres
-	key := "pairing:" + request.PairingCode
-	deviceID, err := redisclient.Rdb.Get(ctx, key).Result()
+	// Assign the deviceID to the screen in Redis
+	key := request.PairingCode
+	deviceID, err := redis.Rdb.Get(ctx, key).Result()
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could find deviceID for pairing code"}
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not find deviceID for pairing code"}
 	}
-	redisclient.Rdb.Del(ctx, key)
+	redis.Rdb.Del(ctx, key)
 
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not update screen device ID"}
@@ -314,4 +315,3 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Er
 
 	return gin.H{"success": "screen paired successfully"}, nil
 }
-
