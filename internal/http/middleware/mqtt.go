@@ -29,7 +29,7 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 
 // MQTT connection lost handler
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	log.Error().Err(err).Msg("Connection lost with client")
+	log.Warn().Err(err).Msg("Connection lost with client")
 }
 
 // SetBrokerURL allows configuration of the MQTT broker URL

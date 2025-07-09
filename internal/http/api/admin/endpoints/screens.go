@@ -49,6 +49,7 @@ func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 func (t *TvController) listScreens(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	all, err := t.store.ListScreens()
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to get screens from the database")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 

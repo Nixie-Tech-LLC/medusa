@@ -43,7 +43,7 @@ func (t *TvController) registerPairingCode(c *gin.Context) {
 	}
 
 	if isPaired == true {
-		fmt.Println("error : Screen is already paired")
+		log.Error().Err(err).Msg("Screen is already paired")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Screen is already paired"})
 		return
 	}
@@ -57,12 +57,14 @@ func (t *TvController) registerPairingCode(c *gin.Context) {
 func (t *TvController) tvWebSocket(c *gin.Context) {
 	var request packets.TVRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Error parsing request")
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
 	screen, err := db.GetScreenByDeviceID(&request.DeviceID)
 	if err != nil {
+		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("Device ID not found")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
 		return
 	}
@@ -78,7 +80,7 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 	// Subscribe to device-specific topic
 	topic := fmt.Sprintf("tv/%s/commands", *deviceID)
 	if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
-		log.Printf("Failed to subscribe TV device %s to topic %s: %v", *deviceID, topic, token.Error())
+		log.Error().Err(err).Str("deviceID", *deviceID).Str("topic", topic).Msg("Failed to subscribe to topic")
 		client.Disconnect(250)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
 		return
@@ -89,6 +91,5 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 	middleware.ClientMutex.Unlock()
 
 	log.Info().Str("deviceID", *deviceID).Msg("Connected device to MQTT")
-
 	c.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
 }
