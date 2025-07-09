@@ -1,7 +1,7 @@
 package endpoints
 
 import (
-	"log"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
 

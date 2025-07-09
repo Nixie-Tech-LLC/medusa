@@ -49,7 +49,6 @@ func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 func (t *TvController) listScreens(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	all, err := t.store.ListScreens()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get screens from the database")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 
@@ -81,6 +80,7 @@ func (t *TvController) createScreen(ctx *gin.Context, user *model.User) (any, *a
 
 	_, err := middleware.CreateMQTTClient(request.Name)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to create MQTT client")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
@@ -106,10 +106,11 @@ func (t *TvController) getScreen(ctx *gin.Context, user *model.User) (any, *api.
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
-
+	log.Error().Err(err).Msg("Failed to get screen")
 	s, err := t.store.GetScreenByID(id)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
 	if s.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -136,6 +137,7 @@ func (t *TvController) updateScreen(ctx *gin.Context, user *model.User) (any, *a
 	existing, err := t.store.GetScreenByID(id)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -143,6 +145,7 @@ func (t *TvController) updateScreen(ctx *gin.Context, user *model.User) (any, *a
 
 	var req packets.UpdateScreenRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON body")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
@@ -167,11 +170,13 @@ func (t *TvController) deleteScreen(ctx *gin.Context, user *model.User) (any, *a
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+		log.Error().Err(err).Msg("Failed delete screen")
 	}
 
 	existing, err := t.store.GetScreenByID(id)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -188,11 +193,13 @@ func (t *TvController) assignScreenToUser(ctx *gin.Context, user *model.User) (a
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+		log.Error().Err(err).Msg("Failed assign screen to user")
 	}
 
 	existing, err := t.store.GetScreenByID(screenID)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -200,9 +207,11 @@ func (t *TvController) assignScreenToUser(ctx *gin.Context, user *model.User) (a
 
 	var req packets.AssignScreenRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON body")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 	if err := t.store.AssignScreenToUser(screenID, req.UserID); err != nil {
+		log.Error().Err(err).Msg("Failed to assign screen to user")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not assign screen"}
 	}
 	return nil, nil
@@ -212,11 +221,13 @@ func (t *TvController) getContentForScreen(ctx *gin.Context, user *model.User) (
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+		log.Error().Err(err).Msg("Failed get content for screen")
 	}
 
 	existing, err := t.store.GetScreenByID(screenID)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -224,6 +235,7 @@ func (t *TvController) getContentForScreen(ctx *gin.Context, user *model.User) (
 
 	content, err := t.store.GetContentForScreen(screenID)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to get content for screen")
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "no content assigned"}
 	}
 	return packets.ContentResponse{
@@ -239,6 +251,7 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+		log.Error().Err(err).Msg("Failed assign content to screen")
 	}
 
 	existingScreen, err := t.store.GetScreenByID(screenID)
@@ -252,26 +265,31 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 
 	var request packets.AssignContentToScreenRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON body")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 	existingContent, err := t.store.GetContentByID(request.ContentID)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "content not found"}
+		log.Error().Err(err).Msg("Failed to get content for screen")
 	}
 	if existingContent.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
 	if err := t.store.AssignContentToScreen(screenID, request.ContentID); err != nil {
+		log.Error().Err(err).Msg("Failed to assign content to screen")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 	content, err := t.store.GetContentForScreen(screenID)
+	log.Error().Err(err).Msg("Failed to get content to screen")
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 
 	screen, err := t.store.GetScreenByID(screenID)
 	if err != nil || screen.DeviceID == nil {
+		log.Error().Err(err).Msg("Failed to get screen by ID")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "screen does not exist"}
 	}
 
@@ -284,8 +302,10 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	})
 	if err == nil {
 		err := middleware.SendMessageToScreen(*screen.DeviceID, response)
+		log.Error().Err(err).Msg("Failed to send message to screen")
 		if err != nil {
 			return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
+			log.Error().Err(err).Msg("Failed to send message to screen")
 		}
 	}
 
@@ -295,6 +315,7 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Error) {
 	var request packets.PairScreenRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Failed to bind JSON body")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
@@ -303,14 +324,17 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Er
 	deviceID, err := redis.Rdb.Get(ctx, key).Result()
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not find deviceID for pairing code"}
+		log.Error().Err(err).Msg("Failed to get device ID for pairing code")
 	}
 	redis.Rdb.Del(ctx, key)
 
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
+		log.Error().Err(err).Msg("Failed to assign device ID to screen")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not update screen device ID"}
 	}
 
 	if err := db.PairScreen(request.ScreenID); err != nil {
+		log.Error().Err(err).Msg("Failed to pair screen")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not update screen"}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,6 +29,7 @@ func Init(databaseURL string) error {
 	var err error
 	DB, err = sqlx.Connect("postgres", databaseURL)
 	if err != nil {
+		log.Error().Msg("failed to connect to database")
 		return err
 	}
 	return nil
@@ -41,6 +43,7 @@ func RunMigrations(migrationsPath string) error {
 	pattern := filepath.Join(migrationsPath, "*.up.sql")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
+		log.Error().Msg("failed to list up migrations")
 		return fmt.Errorf("failed to glob migrations: %w", err)
 	}
 	if len(files) == 0 {
@@ -55,6 +58,7 @@ func RunMigrations(migrationsPath string) error {
 	for _, file := range files {
 		sqlBytes, err := os.ReadFile(file)
 		if err != nil {
+			log.Error().Msg("failed to read migration file")
 			return fmt.Errorf("could not read migration %q: %w", file, err)
 		}
 		sqlStmt := string(sqlBytes)
@@ -78,6 +82,7 @@ func CreateUser(email, hashedPassword string, name *string) (int, error) {
 	var newID int
 	err := DB.QueryRow(query, email, hashedPassword, name).Scan(&newID)
 	if err != nil {
+		log.Error().Msg("failed to create user")
 		return 0, err
 	}
 	return newID, nil
@@ -96,6 +101,7 @@ func GetUserByEmail(email string) (*model.User, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
+		log.Error().Msg("failed to get user by email")
 		return nil, err
 	}
 	return &u, nil
@@ -111,6 +117,7 @@ func GetUserByID(id int) (*model.User, error) {
 	`
 	err := DB.Get(&u, query, id)
 	if err != nil {
+		log.Error().Msg("failed to get user by id")
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
@@ -131,13 +138,18 @@ func UpdateUserProfile(id int, email string, name *string) error {
 	`
 	res, err := DB.Exec(query, id, email, name)
 	if err != nil {
+		log.Error().Msg("failed to update user profile - exec")
 		return err
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		return err
+		log.Error().Msg("failed to update user profile - rows affected")
+		{
+			return err
+		}
 	}
 	if rows == 0 {
+		log.Error().Msg("failed to update user profile - no such user")
 		return errors.New("no such user")
 	}
 	return nil
@@ -150,6 +162,7 @@ func GetScreenByID(id int) (model.Screen, error) {
 		FROM screens
 		WHERE id = $1
 		`, id)
+	log.Error().Msg("failed to get screen by id")
 	return screen, err
 }
 
@@ -160,6 +173,7 @@ func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 		FROM screens
 		WHERE device_id = $1
 		`, deviceID)
+	log.Error().Msg("failed to get screen by device id")
 	return screen, err
 }
 
@@ -171,6 +185,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 		WHERE device_id = $1
 	`, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Error().Msg("failed to check if device is paired by device ID")
 		return false, nil
 	}
 	return isPaired, err
@@ -183,6 +198,7 @@ func ListScreens() ([]model.Screen, error) {
 		FROM screens
 		ORDER BY id
 		`)
+	log.Error().Msg("failed to list screens")
 	return screens, err
 }
 
@@ -193,6 +209,7 @@ func CreateScreen(name string, location *string, createdBy int) (model.Screen, e
 	VALUES ($1, $2, false, $3, now(), now())
 	RETURNING id, device_id, name, location, paired, created_by, created_at, updated_at;`
 	if err := DB.Get(&s, q, name, location, createdBy); err != nil {
+		log.Error().Msg("failed to create screen")
 		return model.Screen{}, err
 	}
 	return s, nil
@@ -206,6 +223,7 @@ func UpdateScreen(id int, name, location *string) error {
 		updated_at = now()
 		WHERE id = $1
 		`, id, name, location)
+	log.Error().Msg("failed to update screen")
 	return err
 }
 
@@ -216,6 +234,7 @@ func PairScreen(id int) error {
 		updated_at = now()
 		WHERE id = $1
 		`, id)
+	log.Error().Msg("failed to pair screen")
 	return err
 }
 
@@ -226,11 +245,13 @@ func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 		updated_at = now()
 		WHERE id = $1
 		`, screenID, deviceID)
+	log.Error().Msg("failed to assign device ID to screen")
 	return err
 }
 
 func DeleteScreen(id int) error {
 	_, err := DB.Exec(`DELETE FROM screens WHERE id = $1`, id)
+	log.Error().Msg("failed to delete screen")
 	return err
 }
 
@@ -240,6 +261,7 @@ func AssignScreenToUser(screenID, userID int) error {
 		VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
 		`, screenID, userID)
+	log.Error().Msg("failed to assign screen to user")
 	return err
 }
 
@@ -252,6 +274,7 @@ func AssignContentToScreen(screenID, contentID int) error {
 		DO UPDATE SET content_id = EXCLUDED.content_id,
 		assigned_at = EXCLUDED.assigned_at;
 		`, screenID, contentID)
+	log.Error().Msg("failed to assign content to screen")
 	return err
 }
 
@@ -264,6 +287,9 @@ func GetContentForScreen(screenID int) (*model.Content, error) {
 		WHERE sc.screen_id = $1
 		`, screenID)
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Error().Err(err).Msg("Failed to get content for screen")
+	}
+	{
 		return nil, sql.ErrNoRows
 	}
 	return &c, err
@@ -290,6 +316,7 @@ func CreateContent(
 		defaultDuration,
 		createdBy,
 	); err != nil {
+		log.Error().Err(err).Msg("Failed to create content for screen")
 		return model.Content{}, err
 	}
 	return c, nil
@@ -305,6 +332,8 @@ func GetContentByID(id int) (model.Content, error) {
 
 	err := DB.Get(&c, query, id)
 	if errors.Is(err, sql.ErrNoRows) {
+
+		log.Error().Err(err).Msg("Failed to get content for screen by ID")
 		return model.Content{}, sql.ErrNoRows
 	}
 	return c, err
@@ -326,6 +355,7 @@ func ListContent() ([]model.Content, error) {
   ORDER BY id;
   `
 	if err := DB.Select(&all, query); err != nil {
+		log.Error().Err(err).Msg("Failed to list content for screen")
 		return nil, err
 	}
 	return all, nil
@@ -346,11 +376,13 @@ func UpdateContent(
 		WHERE id = $1;`,
 		id, name, url, defaultDuration,
 	)
+	log.Error().Err(err).Msg("Failed to update content")
 	return err
 }
 
 func DeleteContent(id int) error {
 	_, err := DB.Exec(`DELETE FROM content WHERE id = $1;`, id)
+	log.Error().Err(err).Msg("Failed to delete content")
 	return err
 }
 
@@ -364,6 +396,8 @@ func CreatePlaylist(name, description string, createdBy int) (model.Playlist, er
 	($1,   $2,          $3,         now(),      now())
 	RETURNING id, name, description, created_by, created_at, updated_at;`
 	if err := DB.Get(&p, q, name, description, createdBy); err != nil {
+
+		log.Error().Err(err).Msg("Failed to create playlist")
 		return model.Playlist{}, err
 	}
 	return p, nil
@@ -377,6 +411,8 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 		FROM playlists
 		WHERE id = $1;`
 		if err := DB.Get(&p, q, id); err != nil {
+
+			log.Error().Err(err).Msg("Failed to get playlist by ID")
 			return p, err
 		}
 		return p, nil
@@ -401,6 +437,7 @@ func ListPlaylists() ([]model.Playlist, error) {
 	ORDER BY id;`
 
 	err := DB.Select(&out, query)
+	log.Error().Err(err).Msg("Failed to list playlists")
 	return out, err
 }
 
@@ -417,11 +454,13 @@ func UpdatePlaylist(
 		WHERE id = $1;`,
 		id, name, description,
 	)
+	log.Error().Err(err).Msg("Failed to update playlist")
 	return err
 }
 
 func DeletePlaylist(id int) error {
 	_, err := DB.Exec(`DELETE FROM playlists WHERE id = $1;`, id)
+	log.Error().Err(err).Msg("Failed to delete playlist")
 	return err
 }
 
@@ -440,6 +479,7 @@ func AddItemToPlaylist(
 	if err := DB.Get(&it, query,
 		playlistID, contentID, position, duration,
 	); err != nil {
+		log.Error().Err(err).Msg("Failed to add item to playlist")
 		return model.PlaylistItem{}, err
 	}
 	return it, nil
@@ -458,11 +498,13 @@ func UpdatePlaylistItem(
 		WHERE id = $1;`,
 		itemID, position, duration,
 	)
+	log.Error().Err(err).Msg("Failed to update playlistItem")
 	return err
 }
 
 func RemovePlaylistItem(itemID int) error {
 	_, err := DB.Exec(`DELETE FROM playlist_items WHERE id = $1;`, itemID)
+	log.Error().Err(err).Msg("Failed to remove playlistItem")
 	return err
 }
 
@@ -476,6 +518,7 @@ func ListPlaylistItems(playlistID int) ([]model.PlaylistItem, error) {
 	ORDER BY position;`
 
 	err := DB.Select(&list, query, playlistID)
+	log.Error().Err(err).Msg("Failed to list playlistItems")
 	return list, err
 }
 
@@ -492,6 +535,7 @@ func AssignPlaylistToScreen(screenID, playlistID int) error {
 		assigned_at = now();`,
 		screenID, playlistID,
 	)
+	log.Error().Err(err).Msg("Failed to assign playlist to screen")
 	return err
 }
 
@@ -504,6 +548,8 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+
+			log.Error().Err(err).Msg("Failed to get playlist for screen")
 			return model.Playlist{}, sql.ErrNoRows
 		}
 		return model.Playlist{}, err
