@@ -1,8 +1,8 @@
 package db
 
 import (
-	"github.com/jmoiron/sqlx"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
+	"github.com/jmoiron/sqlx"
 )
 
 // Store defines all operations against the database.
@@ -16,7 +16,7 @@ type Store interface {
 	// screen functions
 	GetScreenByID(id int) (model.Screen, error)
 	ListScreens() ([]model.Screen, error)
-    CreateScreen(name string, location *string, createdBy int) (model.Screen, error)
+	CreateScreen(name string, location *string, createdBy int) (model.Screen, error)
 	UpdateScreen(id int, name, location *string) error
 	DeleteScreen(id int) error
 	AssignScreenToUser(screenID, userID int) error
@@ -25,7 +25,7 @@ type Store interface {
 	// content functions
 	AssignContentToScreen(screenID, contentID int) error
 	GetContentForScreen(screenID int) (*model.Content, error)
-    CreateContent(name, typ, url string, defaultDuration, createdBy int) (model.Content, error)
+	CreateContent(name, typ, url string, defaultDuration, createdBy int) (model.Content, error)
 
 	GetContentByID(id int) (model.Content, error)
 	ListContent() ([]model.Content, error)
@@ -33,7 +33,7 @@ type Store interface {
 	DeleteContent(id int) error
 
 	// playlists
-    CreatePlaylist(name, description string, createdBy int) (model.Playlist, error)
+	CreatePlaylist(name, description string, createdBy int) (model.Playlist, error)
 	GetPlaylistByID(id int) (model.Playlist, error)
 	ListPlaylists() ([]model.Playlist, error)
 	UpdatePlaylist(id int, name, description *string) error
@@ -85,7 +85,7 @@ func (s *pgStore) ListScreens() ([]model.Screen, error) {
 	return ListScreens()
 }
 func (s *pgStore) CreateScreen(name string, location *string, createdBy int) (model.Screen, error) {
-    return CreateScreen(name, location, createdBy)
+	return CreateScreen(name, location, createdBy)
 }
 func (s *pgStore) UpdateScreen(id int, name, location *string) error {
 	return UpdateScreen(id, name, location)
@@ -108,10 +108,10 @@ func (s *pgStore) GetContentForScreen(screenID int) (*model.Content, error) {
 	return GetContentForScreen(screenID)
 }
 func (s *pgStore) CreateContent(
-    name, typ, url string,
-    defaultDuration, createdBy int,
+	name, typ, url string,
+	defaultDuration, createdBy int,
 ) (model.Content, error) {
-    return CreateContent(name, typ, url, defaultDuration, createdBy)
+	return CreateContent(name, typ, url, defaultDuration, createdBy)
 }
 func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 	return GetContentByID(id)
@@ -126,9 +126,9 @@ func (s *pgStore) DeleteContent(id int) error {
 	return DeleteContent(id)
 }
 
-// @ Playlist 
+// @ Playlist
 func (s *pgStore) CreatePlaylist(name, description string, createdBy int) (model.Playlist, error) {
-    return CreatePlaylist(name, description, createdBy)
+	return CreatePlaylist(name, description, createdBy)
 }
 func (s *pgStore) GetPlaylistByID(id int) (model.Playlist, error) {
 	return GetPlaylistByID(id)
@@ -164,4 +164,3 @@ func (s *pgStore) AssignPlaylistToScreen(screenID, playlistID int) error {
 func (s *pgStore) GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 	return GetPlaylistForScreen(screenID)
 }
-

@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// 'Screen' represents a display device in the system.
+// Screen represents a display device in the system.
 type Screen struct {
 	ID        int       `db:"id"           json:"id"`
 	DeviceID  *string   `db:"device_id"    json:"device_id"`

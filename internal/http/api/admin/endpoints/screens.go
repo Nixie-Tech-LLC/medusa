@@ -102,28 +102,41 @@ func (t *TvController) createScreen(ctx *gin.Context, user *model.User) (any, *a
 
 // GET /api/admin/screens/:id
 func (t *TvController) getScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	// 	creates id variable, creates err variable
+	// 	id = gets the id from the endpoint url and sets it equal to the variable id
 	id, err := strconv.Atoi(ctx.Param("id"))
+	// if err is equal to something, return STATUSBADREQUEST response (400 error code)
 	if err != nil {
+		log.Error().Err(err).Int("id", id).Msg("Invalid id in request")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
-	log.Error().Err(err).Msg("Failed to get screen")
-	s, err := t.store.GetScreenByID(id)
+	// Question: What would the log be for when the id is valid?
+	// Answer: {level: info, timestamp: ____, id: {id}, message: "Valid id received in request"}
+	log.Info().Int("id", id).Msg("Valid id received in request") // example of information log
+
+	// creates variable s and err
+	// searches the database, finds the screen and puts it inside the "screen" variable
+	screen, err := t.store.GetScreenByID(id)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
-		log.Error().Err(err).Msg("Failed to get screen by ID")
 	}
-	if s.CreatedBy != user.ID {
+
+	// Question: What does the if statement do in english?
+	// Hint: If user with id 3 creates screen with name "x", CreatedBy for screen "x" is set to 3
+	// Answer:
+	if screen.CreatedBy != user.ID {
+		// TODO: add an error log after you answer the question plainly
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
 	return packets.ScreenResponse{
-		ID:        s.ID,
-		DeviceID:  s.DeviceID,
-		Name:      s.Name,
-		Location:  s.Location,
-		Paired:    s.Paired,
-		CreatedAt: s.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
+		ID:        screen.ID,
+		DeviceID:  screen.DeviceID,
+		Name:      screen.Name,
+		Location:  screen.Location,
+		Paired:    screen.Paired,
+		CreatedAt: screen.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: screen.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -136,8 +149,8 @@ func (t *TvController) updateScreen(ctx *gin.Context, user *model.User) (any, *a
 
 	existing, err := t.store.GetScreenByID(id)
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 		log.Error().Err(err).Msg("Failed to get screen by ID")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -169,14 +182,14 @@ func (t *TvController) updateScreen(ctx *gin.Context, user *model.User) (any, *a
 func (t *TvController) deleteScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 		log.Error().Err(err).Msg("Failed delete screen")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
 	existing, err := t.store.GetScreenByID(id)
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 		log.Error().Err(err).Msg("Failed to get screen by ID")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -192,14 +205,14 @@ func (t *TvController) deleteScreen(ctx *gin.Context, user *model.User) (any, *a
 func (t *TvController) assignScreenToUser(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 		log.Error().Err(err).Msg("Failed assign screen to user")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
 	existing, err := t.store.GetScreenByID(screenID)
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 		log.Error().Err(err).Msg("Failed to get screen by ID")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -220,14 +233,14 @@ func (t *TvController) assignScreenToUser(ctx *gin.Context, user *model.User) (a
 func (t *TvController) getContentForScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 		log.Error().Err(err).Msg("Failed get content for screen")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
 	existing, err := t.store.GetScreenByID(screenID)
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 		log.Error().Err(err).Msg("Failed to get screen by ID")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
 	}
 	if existing.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
@@ -250,8 +263,8 @@ func (t *TvController) getContentForScreen(ctx *gin.Context, user *model.User) (
 func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 		log.Error().Err(err).Msg("Failed assign content to screen")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
 	existingScreen, err := t.store.GetScreenByID(screenID)
@@ -270,8 +283,8 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	}
 	existingContent, err := t.store.GetContentByID(request.ContentID)
 	if err != nil {
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "content not found"}
 		log.Error().Err(err).Msg("Failed to get content for screen")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "content not found"}
 	}
 	if existingContent.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
