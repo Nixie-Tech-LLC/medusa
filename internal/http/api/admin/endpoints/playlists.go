@@ -4,6 +4,7 @@ import (
     "net/http"
     "strconv"
     "log"
+	"github.com/rs/zerolog"
 
     "github.com/gin-gonic/gin"
     "github.com/Nixie-Tech-LLC/medusa/internal/db"
@@ -35,7 +36,6 @@ func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
-// works fine
 func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (any, *api.Error) {
     all, err := p.store.ListPlaylists()
     if err != nil {
@@ -68,13 +68,10 @@ func (p *PlaylistController) createPlaylist(ctx *gin.Context, user *model.User) 
 
     // reload to include items (initially empty)
     full, _ := p.store.GetPlaylistByID(pl.ID)
-	return mapPlaylist(full), nil // TODO: playlist not added to db during testing, 204 response + empty get playlists
-	// ruled out frontend issue, db insert error, or backend error checks.
-	// could be migration stuff, db build or setup but unlikely idk
+	return mapPlaylist(full), log.Info().Str("username", user.Name)
 }
 
 // getPlaylist fetches a single playlist by ID and checks ownership.
-// TODO: simple test
 func (p *PlaylistController) getPlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     id, _ := strconv.Atoi(ctx.Param("id"))
     pl, err := p.store.GetPlaylistByID(id)
