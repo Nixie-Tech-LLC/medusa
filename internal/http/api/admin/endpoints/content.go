@@ -2,18 +2,17 @@ package endpoints
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
 	"time"
-	"log"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
-
 )
 
 type ContentController struct {
@@ -27,17 +26,16 @@ func NewContentController(store db.Store) *ContentController {
 func RegisterContentRoutes(router gin.IRoutes, store db.Store) {
 	ctl := NewContentController(store)
 	// require auth for all:
-	router.GET("/content/:id", 		api.ResolveEndpointWithAuth(ctl.getContent))
-	router.GET("/content", 			api.ResolveEndpointWithAuth(ctl.listContent))
-	router.POST("/content", 		api.ResolveEndpointWithAuth(ctl.createContent))
-	router.PUT("/content/:id", 		api.ResolveEndpointWithAuth(ctl.updateContent))
-	router.DELETE("/content/:id", 	api.ResolveEndpointWithAuth(ctl.deleteContent))
+	router.GET("/content/:id", api.ResolveEndpointWithAuth(ctl.getContent))
+	router.GET("/content", api.ResolveEndpointWithAuth(ctl.listContent))
+	router.POST("/content", api.ResolveEndpointWithAuth(ctl.createContent))
+	router.PUT("/content/:id", api.ResolveEndpointWithAuth(ctl.updateContent))
+	router.DELETE("/content/:id", api.ResolveEndpointWithAuth(ctl.deleteContent))
 }
 
-func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error){
+func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	all, err := c.store.ListContent()
 	if err != nil {
-		log.Printf("[content] listContent DB error: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not list content"})
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}
@@ -63,6 +61,7 @@ func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any
 func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
+		log.Error().Msg("Failed to get content id")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
@@ -90,7 +89,7 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	var req packets.CreateContentRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		log.Printf("[content] CreateContent failed: %v", err)
+		log.Error().Msg("Failed to create content request")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}
 
@@ -103,18 +102,19 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 	)
 
 	if err != nil {
-		log.Printf("[content] CreateContent failed: %v", err)
+		log.Error().Msg("Failed to create content")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "could not create content"}
 	}
 
 	if req.ScreenID != nil {
 		if err := c.store.AssignContentToScreen(*req.ScreenID, content.ID); err != nil {
-			log.Printf("[content] CreateContent failed: %v", err)
+			log.Error().Msg("Failed to assign content to screen")
 			return nil, &api.Error{Code: http.StatusForbidden, Message: "could not assign content"}
 		}
 		go func(screenID int) {
 			screen, err := c.store.GetScreenByID(screenID)
 			if err != nil || screen.Location == nil {
+				log.Error().Msg("Failed to get screen by ID")
 				return
 			}
 			http.Get(fmt.Sprintf("%s/update", *screen.Location))
@@ -136,12 +136,14 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	contentID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
+		log.Error().Msg("Failed to update content")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "invalid content id"}
 	}
 
 	// verify ownership
 	existing, err := c.store.GetContentByID(contentID)
 	if err != nil {
+		log.Error().Msg("Failed to get content by ID")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "not found"}
 	}
 	if existing.CreatedBy != user.ID {
@@ -171,6 +173,7 @@ func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (a
 func (c *ContentController) deleteContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	contentID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
+		log.Error().Msg("Failed to delete content")
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "invalid content id"}
 	}
 
@@ -189,4 +192,3 @@ func (c *ContentController) deleteContent(ctx *gin.Context, user *model.User) (a
 
 	return nil, nil
 }
-

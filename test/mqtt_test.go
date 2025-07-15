@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"encoding/json"
+	"github.com/rs/zerolog/log"
 	"testing"
 	"time"
 

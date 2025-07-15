@@ -4,6 +4,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
@@ -19,12 +20,14 @@ func ResolveEndpointWithAuth(h HandlerFuncWithAuth) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		user, ok := middleware.GetCurrentUser(ctx)
 		if !ok {
+			log.Error().Msg("user not found in database")
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
 
 		result, err := h(ctx, user)
 		if err != nil {
+			log.Error().Msg("failed to resolve endpoint")
 			ctx.JSON(err.Code, gin.H{"error": err.Message})
 			return
 		}
@@ -38,9 +41,9 @@ func ResolveEndpoint(h HandlerFunc) gin.HandlerFunc {
 		result, err := h(ctx)
 		if err != nil {
 			ctx.JSON(err.Code, gin.H{"error": err.Message})
+			log.Error().Msg("failed to handle request")
 			return
 		}
-
 		ctx.JSON(http.StatusOK, result)
 	}
 }

@@ -34,12 +34,14 @@ func (t *TvController) registerPairingCode(c *gin.Context) {
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+		log.Error().Err(err).Msg("failed to bind JSON")
 	}
 
 	isPaired, err := db.IsScreenPairedByDeviceID(&request.DeviceID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+		log.Error().Err(err).Msg("failed to check if screen is paired by device")
 	}
 
 	if isPaired == true {
