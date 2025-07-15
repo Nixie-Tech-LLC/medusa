@@ -396,7 +396,8 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	// A: We want the most up-to-date version of the content for the response.
 	content, err := t.store.GetContentForScreen(screenID)
 	log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-		Msg("Failed to retrieve assigned content for screen")	if err != nil {
+		Msg("Failed to retrieve assigned content for screen")
+	if err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 	// Question: Why do we fetch the screen again here?
@@ -404,7 +405,8 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	screen, err := t.store.GetScreenByID(screenID)
 	if err != nil || screen.DeviceID == nil {
 		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-			Msg("Failed to retrieve screen or missing device ID during message dispatch")		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "screen does not exist"}
+			Msg("Failed to retrieve screen or missing device ID during message dispatch")
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "screen does not exist"}
 	}
 	// Question: Why are we converting the content response into JSON?
 	// A: The device expects to receive data in JSON format.
