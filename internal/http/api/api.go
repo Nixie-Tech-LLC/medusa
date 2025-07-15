@@ -40,10 +40,10 @@ func ResolveEndpoint(h HandlerFunc) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		result, err := h(ctx)
 		if err != nil {
+			ctx.JSON(err.Code, gin.H{"error": err.Message})
 			log.Error().Msg("failed to handle request")
+			return
 		}
-		ctx.JSON(err.Code, gin.H{"error": err.Message})
-		return
 		ctx.JSON(http.StatusOK, result)
 	}
 }
