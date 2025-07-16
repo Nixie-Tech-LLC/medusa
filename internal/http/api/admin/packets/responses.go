@@ -1,5 +1,9 @@
 package packets
 
+// RESPONSES FOR /api/tv/screens/*
+
+import "time"
+
 // Response mirrors model.Content but flattens time.
 type ContentResponse struct {
 	ID        int    `json:"id"`
@@ -8,3 +12,33 @@ type ContentResponse struct {
 	URL       string `json:"url"`
 	CreatedAt string `json:"created_at"`
 }
+
+// screenResponse mirrors model.Screen but flattens times to RFC3339
+type ScreenResponse struct {
+	ID        int     `json:"id"`
+	DeviceID  *string `json:"device_id"`
+	Name      string  `json:"name"`
+	Location  *string `json:"location"`
+	Paired    bool    `json:"paired"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+}
+
+type PlaylistItemResponse struct {
+    ID        int       `json:"id"`
+    ContentID int       `json:"content_id"`
+    Position  int       `json:"position"`
+    Duration  int       `json:"duration"`
+    CreatedAt time.Time `json:"created_at"`
+}
+
+type PlaylistResponse struct {
+    ID          int                       `json:"id"`
+    Name        string                    `json:"name"`
+    Description string                    `json:"description"`
+    CreatedBy   int                       `json:"created_by"`
+    CreatedAt   time.Time                 `json:"created_at"`
+    UpdatedAt   time.Time                 `json:"updated_at"`
+    Items       []PlaylistItemResponse    `json:"items"`
+}
+

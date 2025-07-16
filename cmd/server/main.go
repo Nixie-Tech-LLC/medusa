@@ -5,15 +5,15 @@ import (
 	"os"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	"github.com/gin-contrib/cors"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
 	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
-	redisclient "github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -29,6 +29,12 @@ func main() {
 	secretKey := os.Getenv("JWT_SECRET")
 	serverAddress := os.Getenv("SERVER_ADDRESS")
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
+
+	// Set MQTT broker URL if provided
+	if mqttBrokerURL != "" {
+		middleware.SetBrokerURL(mqttBrokerURL)
+	}
 
 	// initialize PostgreSQL
 	if err := db.Init(databaseUrl); err != nil {
@@ -40,16 +46,23 @@ func main() {
 		log.Fatalf("db migrate: %v", err)
 	}
 
+	// initialize MQTT
+	if _, err := middleware.CreateMQTTClient("medusa-server"); err != nil {
+		log.Fatalf("mqtt init: %v", err)
+	}
 
 	// set up gin router
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"}, // your frontend origin
+		AllowOriginFunc: func(origin string) bool {
+			// Allow all origins
+			return true
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 	}))
 
 	sqlxDB, err := sqlx.Connect("postgres", databaseUrl)
@@ -58,7 +71,7 @@ func main() {
 		log.Fatalf("Failed to connect to db via sqlx: %v", err)
 	}
 	store := db.NewStore(sqlxDB)
-	redisclient.InitRedis()
+	redis.InitRedis()
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 	authapi.RegisterAuthRoutes(admin, secretKey, store)
@@ -70,12 +83,12 @@ func main() {
 	protected.Use(middleware.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
 	adminapi.RegisterContentRoutes(protected, store)
+	adminapi.RegisterScreenRoutes(protected, store)
 	adminapi.RegisterScheduleRoutes(protected)
+	adminapi.RegisterPlaylistRoutes(protected, store)
 
 	tv := r.Group("/api/tv")
-	tv.Use(middleware.JWTMiddleware(secretKey))
-	tvapi.RegisterScreenRoutes(tv, store)
-	tvapi.RegisterPairingRoutes(tv)
+	tvapi.RegisterPairingRoutes(tv, store)
 
 	// start
 	log.Printf("listening on %s", serverAddress)
