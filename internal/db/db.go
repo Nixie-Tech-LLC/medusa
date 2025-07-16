@@ -15,8 +15,8 @@ import (
 )
 
 /*
-  TODO: Handle errors inside getter and setter functions
-    so try catch isn't necessary for each usage
+TODO: Handle errors inside getter and setter functions
+so try catch isn't necessary for each usage
 */
 
 var (
@@ -170,7 +170,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 		SELECT paired
 		FROM screens
 		WHERE device_id = $1
-	`, deviceID)
+		`, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -312,24 +312,24 @@ func GetContentByID(id int) (model.Content, error) {
 }
 
 func ListContent() ([]model.Content, error) {
-  var all []model.Content
-  query := `
-  SELECT
-    id,
-    name,
-    type,
-    url,
-    default_duration,
-    created_by,
-    created_at,
-    updated_at
-  FROM content
-  ORDER BY id;
-  `
-  if err := DB.Select(&all, query); err != nil {
-    return nil, err
-  }
-  return all, nil
+	var all []model.Content
+	query := `
+	SELECT
+	id,
+	name,
+	type,
+	url,
+	default_duration,
+	created_by,
+	created_at,
+	updated_at
+	FROM content
+	ORDER BY id;
+	`
+	if err := DB.Select(&all, query); err != nil {
+		return nil, err
+	}
+	return all, nil
 }
 
 
@@ -375,7 +375,13 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 	p, err := func() (model.Playlist, error) {
 		var p model.Playlist
 		q := `
-		SELECT id, name, description, created_at, updated_at
+		SELECT
+		id,
+		name,
+		description,
+		created_by,
+		created_at,
+		updated_at
 		FROM playlists
 		WHERE id = $1;`
 		if err := DB.Get(&p, q, id); err != nil {
@@ -398,10 +404,15 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 func ListPlaylists() ([]model.Playlist, error) {
 	var out []model.Playlist
 	query := `
-	SELECT id, name, description, created_at, updated_at
+	SELECT
+	id,
+	name,
+	description,
+	created_by,
+	created_at,
+	updated_at
 	FROM playlists
 	ORDER BY id;`
-
 	err := DB.Select(&out, query)
 	return out, err
 }

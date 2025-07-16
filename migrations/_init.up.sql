@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS playlists (
     id          SERIAL PRIMARY KEY,
     name        TEXT NOT NULL,
     description TEXT,
+    items       INT NOT NULL REFERENCES playlist_items(id) ON DELETE CASCADE,
     created_by  INT NOT NULL REFERENCES users(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()

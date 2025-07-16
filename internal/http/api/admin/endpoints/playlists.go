@@ -3,8 +3,7 @@ package endpoints
 import (
     "net/http"
     "strconv"
-    "log"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
     "github.com/gin-gonic/gin"
     "github.com/Nixie-Tech-LLC/medusa/internal/db"
@@ -24,15 +23,16 @@ func NewPlaylistController(store db.Store) *PlaylistController {
 func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
     ctl := NewPlaylistController(store)
 
-    r.GET("/playlists", api.ResolveEndpointWithAuth(ctl.listPlaylists))
-    r.POST("/playlists", api.ResolveEndpointWithAuth(ctl.createPlaylist))
-    r.GET("/playlists/:id", api.ResolveEndpointWithAuth(ctl.getPlaylist))
-    r.PUT("/playlists/:id", api.ResolveEndpointWithAuth(ctl.updatePlaylist))
-    r.DELETE("/playlists/:id", api.ResolveEndpointWithAuth(ctl.deletePlaylist))
+    r.GET("/playlists", 						api.ResolveEndpointWithAuth(ctl.listPlaylists))
+    r.POST("/playlists", 						api.ResolveEndpointWithAuth(ctl.createPlaylist))
+    r.GET("/playlists/:id", 					api.ResolveEndpointWithAuth(ctl.getPlaylist))
+    r.PUT("/playlists/:id", 					api.ResolveEndpointWithAuth(ctl.updatePlaylist))
+    r.DELETE("/playlists/:id", 					api.ResolveEndpointWithAuth(ctl.deletePlaylist))
 
-    r.POST("/playlists/:id/items", api.ResolveEndpointWithAuth(ctl.addItem))
-    r.PUT("/playlists/:id/items/:item_id", api.ResolveEndpointWithAuth(ctl.updateItem))
-    r.DELETE("/playlists/:id/items/:item_id", api.ResolveEndpointWithAuth(ctl.removeItem))
+    r.POST("/playlists/:id/items", 				api.ResolveEndpointWithAuth(ctl.addItem))
+    r.PUT("/playlists/:id/items/:item_id", 		api.ResolveEndpointWithAuth(ctl.updateItem))
+    r.DELETE("/playlists/:id/items/:item_id",	api.ResolveEndpointWithAuth(ctl.removeItem))
+	r.GET("/playlists/:id/items", 				api.ResolveEndpointWithAuth(ctl.listItems))
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
@@ -43,13 +43,15 @@ func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlists"}
     }
 
-    var out []packets.PlaylistResponse
+    out := []packets.PlaylistResponse{}
+
     for _, pl := range all {
         if pl.CreatedBy != user.ID {
-            continue // skip playlists not owned by user
+            continue
         }
         out = append(out, mapPlaylist(pl))
     }
+
     return out, nil
 }
 
@@ -57,6 +59,7 @@ func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (
 func (p *PlaylistController) createPlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     var req packets.CreatePlaylistRequest
     if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Printf("[playlist] create: %V", err)
         return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
     }
 
@@ -66,9 +69,9 @@ func (p *PlaylistController) createPlaylist(ctx *gin.Context, user *model.User) 
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create playlist"}
     }
 
-    // reload to include items (initially empty)
     full, _ := p.store.GetPlaylistByID(pl.ID)
-	return mapPlaylist(full), log.Info().Str("username", user.Name)
+	log.Printf("%v", full)
+	return mapPlaylist(full), nil
 }
 
 // getPlaylist fetches a single playlist by ID and checks ownership.
@@ -135,19 +138,34 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
         return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
     }
 
-    // use provided duration or fallback to first item's duration
-    defaultDur := *pl.Items[0].Duration
+    // decide duration
+    defaultDur := 5
     if req.Duration != nil {
         defaultDur = *req.Duration
     }
-    item, err := p.store.AddItemToPlaylist(pid, req.ContentID, req.Position, defaultDur)
+
+    // 1) fetch existing items so we can compute the next position
+    existingItems, err := p.store.ListPlaylistItems(pid)
+    if err != nil {
+        log.Printf("[playlist] list items: %v", err)
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlist items"}
+    }
+
+    // 2) compute new position = (last position) + 1
+    nextPos := 1
+    if len(existingItems) > 0 {
+        nextPos = existingItems[len(existingItems)-1].Position + 1
+    }
+
+    // 3) insert at end
+    item, err := p.store.AddItemToPlaylist(pid, req.ContentID, nextPos, defaultDur)
     if err != nil {
         log.Printf("[playlist] add item: %v", err)
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
     }
+
     return mapItem(item), nil
 }
-
 // updateItem changes position or duration of an existing playlist item.
 // TODO: simple test
 func (p *PlaylistController) updateItem(ctx *gin.Context, user *model.User) (any, *api.Error) {
@@ -183,10 +201,32 @@ func (p *PlaylistController) removeItem(ctx *gin.Context, user *model.User) (any
     }
     return nil, nil
 }
+// mapPlaylist transforms a model.Playlist into the API response packet// above your addItem/updateItem/removeItem methods
 
-// mapPlaylist transforms a model.Playlist into the API response packet.
+// listItems returns all items in a playlist (with ownership check)
+func (p *PlaylistController) listItems(ctx *gin.Context, user *model.User) (any, *api.Error) {
+    pid, _ := strconv.Atoi(ctx.Param("id"))
+    pl, err := p.store.GetPlaylistByID(pid)
+    if err != nil || pl.CreatedBy != user.ID {
+        return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+    }
+
+    items, err := p.store.ListPlaylistItems(pid)
+    if err != nil {
+        log.Printf("[playlist] list items: %v", err)
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlist items"}
+    }
+
+    out := make([]packets.PlaylistItemResponse, len(items))
+    for i, it := range items {
+        out[i] = mapItem(it)
+    }
+    return out, nil
+}
+
 func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
     items := make([]packets.PlaylistItemResponse, len(pl.Items))
+	log.Printf("[playlists] mapPlaylists %v", pl.Items)
     for i, it := range pl.Items {
         items[i] = mapItem(it)
     }

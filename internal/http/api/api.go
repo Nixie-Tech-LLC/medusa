@@ -6,6 +6,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"net/http"
+	"github.com/rs/zerolog/log"
 )
 
 type Error struct {
@@ -21,6 +22,7 @@ func ResolveEndpointWithAuth (h HandlerFuncWithAuth) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		user, ok := middleware.GetCurrentUser(ctx)
 		if !ok {
+			log.Info().Str("error", "unauthorized")
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}

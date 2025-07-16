@@ -51,7 +51,7 @@ type UpdatePlaylistRequest struct {
 
 type AddPlaylistItemRequest struct {
     ContentID int  `json:"content_id" binding:"required"`
-    Position  int  `json:"position" binding:"required"`
+    Position  int  `json:"position"`
     Duration  *int `json:"duration"` // seconds; nil = use content.default_duration
 }
 
