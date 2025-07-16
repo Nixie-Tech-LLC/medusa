@@ -16,8 +16,8 @@ import (
 )
 
 /*
-  TODO: Handle errors inside getter and setter functions
-    so try catch isn't necessary for each usage
+TODO: Handle errors inside getter and setter functions
+so try catch isn't necessary for each usage
 */
 
 var (
@@ -183,7 +183,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 		SELECT paired
 		FROM screens
 		WHERE device_id = $1
-	`, deviceID)
+		`, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Error().Msg("failed to check if device is paired by device ID")
 		return false, nil
@@ -315,7 +315,7 @@ func CreateContent(
 		url,
 		defaultDuration,
 		createdBy,
-	); err != nil {
+		); err != nil {
 		log.Error().Err(err).Msg("Failed to create content for screen")
 		return model.Content{}, err
 	}
@@ -342,18 +342,18 @@ func GetContentByID(id int) (model.Content, error) {
 func ListContent() ([]model.Content, error) {
 	var all []model.Content
 	query := `
-  SELECT
-    id,
-    name,
-    type,
-    url,
-    default_duration,
-    created_by,
-    created_at,
-    updated_at
-  FROM content
-  ORDER BY id;
-  `
+	SELECT
+	id,
+	name,
+	type,
+	url,
+	default_duration,
+	created_by,
+	created_at,
+	updated_at
+	FROM content
+	ORDER BY id;
+	`
 	if err := DB.Select(&all, query); err != nil {
 		log.Error().Err(err).Msg("Failed to list content for screen")
 		return nil, err
@@ -375,7 +375,7 @@ func UpdateContent(
 		updated_at       = now()
 		WHERE id = $1;`,
 		id, name, url, defaultDuration,
-	)
+		)
 	log.Error().Err(err).Msg("Failed to update content")
 	return err
 }
@@ -407,7 +407,13 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 	p, err := func() (model.Playlist, error) {
 		var p model.Playlist
 		q := `
-		SELECT id, name, description, created_at, updated_at
+		SELECT
+		id,
+		name,
+		description,
+		created_by,
+		created_at,
+		updated_at
 		FROM playlists
 		WHERE id = $1;`
 		if err := DB.Get(&p, q, id); err != nil {
@@ -432,10 +438,15 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 func ListPlaylists() ([]model.Playlist, error) {
 	var out []model.Playlist
 	query := `
-	SELECT id, name, description, created_at, updated_at
+	SELECT
+	id,
+	name,
+	description,
+	created_by,
+	created_at,
+	updated_at
 	FROM playlists
 	ORDER BY id;`
-
 	err := DB.Select(&out, query)
 	log.Error().Err(err).Msg("Failed to list playlists")
 	return out, err
@@ -453,7 +464,7 @@ func UpdatePlaylist(
 		updated_at  = now()
 		WHERE id = $1;`,
 		id, name, description,
-	)
+		)
 	log.Error().Err(err).Msg("Failed to update playlist")
 	return err
 }
@@ -478,7 +489,7 @@ func AddItemToPlaylist(
 
 	if err := DB.Get(&it, query,
 		playlistID, contentID, position, duration,
-	); err != nil {
+		); err != nil {
 		log.Error().Err(err).Msg("Failed to add item to playlist")
 		return model.PlaylistItem{}, err
 	}
@@ -497,7 +508,7 @@ func UpdatePlaylistItem(
 		duration = COALESCE($3, duration)
 		WHERE id = $1;`,
 		itemID, position, duration,
-	)
+		)
 	log.Error().Err(err).Msg("Failed to update playlistItem")
 	return err
 }
@@ -534,7 +545,7 @@ func AssignPlaylistToScreen(screenID, playlistID int) error {
 		active      = true,
 		assigned_at = now();`,
 		screenID, playlistID,
-	)
+		)
 	log.Error().Err(err).Msg("Failed to assign playlist to screen")
 	return err
 }
@@ -545,7 +556,7 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 		SELECT playlist_id FROM screen_playlists
 		WHERE screen_id = $1 AND active = true;`,
 		screenID,
-	)
+		)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 

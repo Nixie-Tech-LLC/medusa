@@ -83,8 +83,9 @@ func main() {
 	protected.Use(middleware.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
 	adminapi.RegisterContentRoutes(protected, store)
-	adminapi.RegisterScheduleRoutes(protected)
 	adminapi.RegisterScreenRoutes(protected, store)
+	adminapi.RegisterScheduleRoutes(protected)
+	adminapi.RegisterPlaylistRoutes(protected, store)
 
 	tv := r.Group("/api/tv")
 	tvapi.RegisterPairingRoutes(tv, store)

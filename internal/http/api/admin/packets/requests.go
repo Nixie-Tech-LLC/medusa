@@ -39,3 +39,24 @@ type UpdateContentRequest struct {
     DefaultDuration *int            `json:"default_duration"`
 }
 
+type CreatePlaylistRequest struct {
+    Name        string `json:"name" binding:"required"`
+    Description string `json:"description"`
+}
+
+type UpdatePlaylistRequest struct {
+    Name        *string `json:"name"`
+    Description *string `json:"description"`
+}
+
+type AddPlaylistItemRequest struct {
+    ContentID int  `json:"content_id" binding:"required"`
+    Position  int  `json:"position"`
+    Duration  *int `json:"duration"` // seconds; nil = use content.default_duration
+}
+
+type UpdatePlaylistItemRequest struct {
+    Position *int `json:"position"`
+    Duration *int `json:"duration"`
+}
+

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 
@@ -87,17 +88,51 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 }
 
 func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
-	var req packets.CreateContentRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		log.Error().Msg("Failed to create content request")
-		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
+	// PostForm is used here and not ShouldBindJSON because content uploads
+	// are done with binary sources (videos and images)
+	// bind form fields
+	name := ctx.PostForm("name")
+	typeVal := ctx.PostForm("type")
+	durationStr := ctx.PostForm("default_duration")
+	if name == "" || typeVal == "" || durationStr == "" {
+		log.Printf("[content] CreateContent failed: missing required form fields")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "missing required form fields"}
+	}
+	defaultDuration, err := strconv.Atoi(durationStr)
+	if err != nil {
+		log.Printf("[content] CreateContent failed: %v", err)
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid default_duration"}
+	}
+	// optional screenID
+	screenIDStr := ctx.PostForm("screen_id")
+	var screenID *int
+	if screenIDStr != "" {
+		sid, err := strconv.Atoi(screenIDStr)
+		if err == nil {
+			screenID = &sid
+		}
 	}
 
+	// retrieve uploaded file
+	fileHeader, err := ctx.FormFile("source")
+	if err != nil {
+		log.Printf("[content] CreateContent failed: %v", err)
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "file is required"}
+	}
+
+	// save file to server (e.g. uploads directory)
+	uploadPath := filepath.Join("uploads", fileHeader.Filename)
+	if err := ctx.SaveUploadedFile(fileHeader, uploadPath); err != nil {
+		log.Printf("[content] CreateContent failed: %v", err)
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not save file"}
+	}
+
+	// create database record
 	content, err := c.store.CreateContent(
-		req.Name,
-		req.Type,
-		req.URL,
-		req.DefaultDuration,
+		name,
+		typeVal,
+		uploadPath,
+		defaultDuration,
 		user.ID,
 	)
 
@@ -106,8 +141,8 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "could not create content"}
 	}
 
-	if req.ScreenID != nil {
-		if err := c.store.AssignContentToScreen(*req.ScreenID, content.ID); err != nil {
+	if screenID != nil {
+		if err := c.store.AssignContentToScreen(*screenID, content.ID); err != nil {
 			log.Error().Msg("Failed to assign content to screen")
 			return nil, &api.Error{Code: http.StatusForbidden, Message: "could not assign content"}
 		}
@@ -118,7 +153,7 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 				return
 			}
 			http.Get(fmt.Sprintf("%s/update", *screen.Location))
-		}(*req.ScreenID)
+		}(*screenID)
 	}
 
 	resp := packets.ContentResponse{
@@ -131,6 +166,7 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 
 	return resp, nil
 }
+
 
 // updateContent handles PUT /content/:id
 func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
