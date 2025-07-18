@@ -33,22 +33,23 @@ func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
     r.PUT("/playlists/:id/items/:item_id", 		api.ResolveEndpointWithAuth(ctl.updateItem))
     r.DELETE("/playlists/:id/items/:item_id",	api.ResolveEndpointWithAuth(ctl.removeItem))
 	r.GET("/playlists/:id/items", 				api.ResolveEndpointWithAuth(ctl.listItems))
+	r.PUT("/playlists/:id/items", 				api.ResolveEndpointWithAuth(ctl.reorderItems))
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
 func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (any, *api.Error) {
     all, err := p.store.ListPlaylists()
     if err != nil {
-        log.Printf("[playlist] list: %v", err)
+        log.Error().Err(err).Msg("[playlist] list: could not list playlists")
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlists"}
     }
 
-    out := []packets.PlaylistResponse{}
-
+    var out []packets.PlaylistResponse
     for _, pl := range all {
         if pl.CreatedBy != user.ID {
             continue
         }
+        // Items are already populated by ListPlaylists
         out = append(out, mapPlaylist(pl))
     }
 
@@ -59,19 +60,18 @@ func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (
 func (p *PlaylistController) createPlaylist(ctx *gin.Context, user *model.User) (any, *api.Error) {
     var req packets.CreatePlaylistRequest
     if err := ctx.ShouldBindJSON(&req); err != nil {
-		log.Printf("[playlist] create: %V", err)
+        log.Error().Err(err).Msg("[playlist] create: bad request")
         return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
     }
 
     pl, err := p.store.CreatePlaylist(req.Name, req.Description, user.ID)
     if err != nil {
-        log.Printf("[playlist] create: %v", err)
+        log.Error().Err(err).Msg("[playlist] create: could not create playlist")
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create playlist"}
     }
 
     full, _ := p.store.GetPlaylistByID(pl.ID)
-	log.Printf("%v", full)
-	return mapPlaylist(full), nil
+    return mapPlaylist(full), nil
 }
 
 // getPlaylist fetches a single playlist by ID and checks ownership.
@@ -199,9 +199,24 @@ func (p *PlaylistController) removeItem(ctx *gin.Context, user *model.User) (any
     if err := p.store.RemovePlaylistItem(iid); err != nil {
         return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
     }
+ 
+    items, err := p.store.ListPlaylistItems(pid)
+    if err != nil {
+        log.Printf("[playlist] list items after delete: %v", err)
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list items"}
+    }
+    ids := make([]int, len(items))
+    for i, it := range items {
+        ids[i] = it.ID
+    }
+ 
+    if err := p.store.ReorderPlaylistItems(pid, ids); err != nil {
+        log.Printf("[playlist] reorder after delete: %v", err)
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not reorder items"}
+    }
+ 
     return nil, nil
 }
-// mapPlaylist transforms a model.Playlist into the API response packet// above your addItem/updateItem/removeItem methods
 
 // listItems returns all items in a playlist (with ownership check)
 func (p *PlaylistController) listItems(ctx *gin.Context, user *model.User) (any, *api.Error) {
@@ -224,6 +239,32 @@ func (p *PlaylistController) listItems(ctx *gin.Context, user *model.User) (any,
     return out, nil
 }
 
+// reorderItems takes a JSON array of item IDs in the new order,
+// updates their position (1-based) in a single transaction,
+// and returns the freshly-ordered list.
+func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (any, *api.Error) {
+   pid, _ := strconv.Atoi(ctx.Param("id"))
+   pl, err := p.store.GetPlaylistByID(pid)
+   if err != nil || pl.CreatedBy != user.ID {
+       return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+   }
+
+   var req struct {
+       ItemIDs []int `json:"item_ids" binding:"required"`
+   }
+   if err := ctx.ShouldBindJSON(&req); err != nil {
+       return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+   }
+
+   if err := p.store.ReorderPlaylistItems(pid, req.ItemIDs); err != nil {
+       log.Printf("[playlist] reorder: %v", err)
+       return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not reorder items"}
+   }
+
+   // return the newly-ordered list
+   return p.listItems(ctx, user)
+}
+
 func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
     items := make([]packets.PlaylistItemResponse, len(pl.Items))
 	log.Printf("[playlists] mapPlaylists %v", pl.Items)
@@ -241,14 +282,20 @@ func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
     }
 }
 
-// mapItem transforms a model.PlaylistItem into the API response packet.
+
 func mapItem(it model.PlaylistItem) packets.PlaylistItemResponse {
+    duration := 5 // fallback default
+    if it.Duration != nil {
+        duration = *it.Duration
+    }
+
     return packets.PlaylistItemResponse{
         ID:        it.ID,
         ContentID: it.ContentID,
         Position:  it.Position,
-        Duration:  *it.Duration,
+        Duration:  duration,
         CreatedAt: it.CreatedAt,
     }
 }
+
 

@@ -90,6 +90,8 @@ func main() {
 	tv := r.Group("/api/tv")
 	tvapi.RegisterPairingRoutes(tv, store)
 
+	r.Static("/uploads", "./uploads")
+
 	// start
 	log.Printf("listening on %s", serverAddress)
 	if err := r.Run(serverAddress); err != nil {

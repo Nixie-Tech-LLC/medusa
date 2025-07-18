@@ -44,6 +44,7 @@ type Store interface {
 	UpdatePlaylistItem(itemID int, position, duration *int) error
 	RemovePlaylistItem(itemID int) error
 	ListPlaylistItems(playlistID int) ([]model.PlaylistItem, error)
+	ReorderPlaylistItems(playlistID int, itemIDs []int) error
 
 	// screen ↔ playlist
 	AssignPlaylistToScreen(screenID, playlistID int) error
@@ -156,6 +157,10 @@ func (s *pgStore) RemovePlaylistItem(itemID int) error {
 func (s *pgStore) ListPlaylistItems(playlistID int) ([]model.PlaylistItem, error) {
 	return ListPlaylistItems(playlistID)
 }
+func (s *pgStore) ReorderPlaylistItems(playlistID int, itemIDs []int) error {
+	return ReorderPlaylistItems(playlistID, itemIDs)
+}
+
 
 // @ Screen <-> Playlist
 func (s *pgStore) AssignPlaylistToScreen(screenID, playlistID int) error {
