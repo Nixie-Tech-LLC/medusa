@@ -1,4 +1,4 @@
-package db 
+package db
 
 import (
 	"database/sql"
@@ -12,18 +12,18 @@ import (
 
 // @ PLAYLIST
 func CreatePlaylist(name, description string, createdBy int) (model.Playlist, error) {
-    var p model.Playlist
-    const q = `
+	var p model.Playlist
+	const q = `
     INSERT INTO playlists (name, description, created_by, created_at, updated_at)
     VALUES ($1, $2, $3, now(), now())
     RETURNING id, name, description, created_by, created_at, updated_at;
     `
-    if err := DB.Get(&p, q, name, description, createdBy); err != nil {
-        log.Error().Err(err).Msg("[db] CreatePlaylist: failed to insert playlist")
-        return model.Playlist{}, err
-    }
-    // p.Items defaults to nil/empty
-    return p, nil
+	if err := DB.Get(&p, q, name, description, createdBy); err != nil {
+		log.Error().Err(err).Msg("[db] CreatePlaylist: failed to insert playlist")
+		return model.Playlist{}, err
+	}
+	// p.Items defaults to nil/empty
+	return p, nil
 }
 
 func GetPlaylistByID(id int) (model.Playlist, error) {
@@ -59,22 +59,22 @@ func GetPlaylistByID(id int) (model.Playlist, error) {
 }
 
 func ListPlaylists() ([]model.Playlist, error) {
-    var out []model.Playlist
-    const q = `SELECT id, name, description, created_by, created_at, updated_at FROM playlists ORDER BY id;`
-    if err := DB.Select(&out, q); err != nil {
-        log.Error().Err(err).Msg("[db] ListPlaylists: failed to select playlists")
-        return nil, err
-    }
+	var out []model.Playlist
+	const q = `SELECT id, name, description, created_by, created_at, updated_at FROM playlists ORDER BY id;`
+	if err := DB.Select(&out, q); err != nil {
+		log.Error().Err(err).Msg("[db] ListPlaylists: failed to select playlists")
+		return nil, err
+	}
 
-    for i := range out {
-        items, err := ListPlaylistItems(out[i].ID)
-        if err != nil {
-            log.Error().Err(err).Msgf("[db] ListPlaylists: failed to load items for playlist %d", out[i].ID)
-            return nil, err
-        }
-        out[i].Items = items
-    }
-    return out, nil
+	for i := range out {
+		items, err := ListPlaylistItems(out[i].ID)
+		if err != nil {
+			log.Error().Err(err).Msgf("[db] ListPlaylists: failed to load items for playlist %d", out[i].ID)
+			return nil, err
+		}
+		out[i].Items = items
+	}
+	return out, nil
 }
 
 func UpdatePlaylist(
@@ -89,7 +89,7 @@ func UpdatePlaylist(
 		updated_at  = now()
 		WHERE id = $1;`,
 		id, name, description,
-		)
+	)
 	log.Error().Err(err).Msg("Failed to update playlist")
 	return err
 }
@@ -114,7 +114,7 @@ func AddItemToPlaylist(
 
 	if err := DB.Get(&it, query,
 		playlistID, contentID, position, duration,
-		); err != nil {
+	); err != nil {
 		log.Error().Err(err).Msg("Failed to add item to playlist")
 		return model.PlaylistItem{}, err
 	}
@@ -133,7 +133,7 @@ func UpdatePlaylistItem(
 		duration = COALESCE($3, duration)
 		WHERE id = $1;`,
 		itemID, position, duration,
-		)
+	)
 	log.Error().Err(err).Msg("Failed to update playlistItem")
 	return err
 }
@@ -145,72 +145,82 @@ func RemovePlaylistItem(itemID int) error {
 }
 
 func ListPlaylistItems(playlistID int) ([]model.PlaylistItem, error) {
-    var list []model.PlaylistItem
-    const query = `
+	var list []model.PlaylistItem
+	const query = `
     SELECT
       id, playlist_id, content_id, position, duration, created_at
     FROM playlist_items
     WHERE playlist_id = $1
     ORDER BY position;`
 
-    err := DB.Select(&list, query, playlistID)
-    if err != nil {
-        log.Error().Err(err).Msg("Failed to list playlistItems")
-    }
-    return list, err
+	err := DB.Select(&list, query, playlistID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to list playlistItems")
+	}
+	return list, err
 }
 
 func ReorderPlaylistItems(playlistID int, itemIDs []int) error {
-    tx, err := DB.Beginx()
-    if err != nil {
-        return err
-    }
-    defer func() {
-        if err != nil {
-            tx.Rollback()
-        } else {
-            tx.Commit()
-        }
-    }()
+	tx, err := DB.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
 
-    count := len(itemIDs)
-    if _, err = tx.Exec(`
+	count := len(itemIDs)
+	if _, err = tx.Exec(`
         UPDATE playlist_items
            SET position = position + $1
          WHERE playlist_id = $2;
     `, count, playlistID); err != nil {
-        return err
-    }
+		return err
+	}
 
-    for idx, itemID := range itemIDs {
-        newPos := idx + 1
-        if _, err = tx.Exec(`
+	for idx, itemID := range itemIDs {
+		newPos := idx + 1
+		if _, err = tx.Exec(`
             UPDATE playlist_items
                SET position = $1
              WHERE id = $2
                AND playlist_id = $3;
         `, newPos, itemID, playlistID); err != nil {
-            return err
-        }
-    }
+			return err
+		}
+	}
 
-    return nil
+	return nil
 }
 
 func AssignPlaylistToScreen(screenID, playlistID int) error {
+	// First deactivate any existing playlist assignments for this screen
 	_, err := DB.Exec(`
+		UPDATE screen_playlists 
+		SET active = false 
+		WHERE screen_id = $1 AND active = true;`,
+		screenID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to deactivate existing playlist assignments")
+		return err
+	}
+
+	// Then insert the new assignment
+	_, err = DB.Exec(`
 		INSERT INTO screen_playlists
 		(screen_id, playlist_id, active, assigned_at)
 		VALUES
-		($1,        $2,          true,    now())
-		ON CONFLICT (screen_id)
-		DO UPDATE SET
-		playlist_id = EXCLUDED.playlist_id,
-		active      = true,
-		assigned_at = now();`,
+		($1,        $2,          true,    now());`,
 		screenID, playlistID,
-		)
-	log.Error().Err(err).Msg("Failed to assign playlist to screen")
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to assign playlist to screen")
+	}
 	return err
 }
 
@@ -220,7 +230,7 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 		SELECT playlist_id FROM screen_playlists
 		WHERE screen_id = $1 AND active = true;`,
 		screenID,
-		)
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 
@@ -232,4 +242,44 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 	return GetPlaylistByID(pid)
 }
 
+type ContentItem struct {
+	URL      string `db:"url"`
+	Duration int    `db:"duration"`
+}
 
+// GetPlaylistContentForScreen returns playlist name and content URLs/durations for a screen
+func GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
+	// Get playlist name
+	var playlistName string
+	err := DB.Get(&playlistName, `
+		SELECT p.name
+		FROM screen_playlists sp
+		JOIN playlists p ON sp.playlist_id = p.id
+		WHERE sp.screen_id = $1 AND sp.active = true;`,
+		screenID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get playlist name for screen")
+		return "", nil, err
+	}
+
+	// Get content items
+	var items []ContentItem
+	err = DB.Select(&items, `
+		SELECT 
+			c.url,
+			COALESCE(pi.duration, c.default_duration) as duration
+		FROM screen_playlists sp
+		JOIN playlist_items pi ON sp.playlist_id = pi.playlist_id
+		JOIN content c ON pi.content_id = c.id
+		WHERE sp.screen_id = $1 AND sp.active = true
+		ORDER BY pi.position;`,
+		screenID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get playlist content for screen")
+		return playlistName, nil, err
+	}
+
+	return playlistName, items, nil
+}

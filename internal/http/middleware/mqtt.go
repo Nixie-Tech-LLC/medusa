@@ -15,6 +15,8 @@ var (
 	ClientMutex sync.RWMutex
 	MqttClient  mqtt.Client
 	BrokerURL   = "ws://localhost:9001" // Default MQTT broker URL
+	BrokerUser  = ""
+	BrokerPass  = ""
 )
 
 // MQTT message handler for TV devices
@@ -37,6 +39,14 @@ func SetBrokerURL(url string) {
 	BrokerURL = url
 }
 
+func SetBrokerUser(brokerUser string) {
+	BrokerUser = brokerUser
+}
+
+func SetBrokerPass(brokerPass string) {
+	BrokerPass = brokerPass
+}
+
 // CreateMQTTClient connects to the MQTT broker as clientName, sets up handlers,
 // then attempts to connect to the broker.
 //
@@ -44,6 +54,8 @@ func SetBrokerURL(url string) {
 // On failure, it logs an error and returns nil with the connection error.
 func CreateMQTTClient(clientName string) (mqtt.Client, error) {
 	opts := mqtt.NewClientOptions()
+	opts.Username = BrokerUser
+	opts.Password = BrokerPass
 	opts.AddBroker(BrokerURL)
 	opts.SetClientID(clientName)
 	opts.SetDefaultPublishHandler(messagePubHandler)

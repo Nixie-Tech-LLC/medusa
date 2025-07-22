@@ -18,7 +18,7 @@ import (
 
 func main() {
 	// load configuration only if not running app locally
-	if os.Getenv("APP_ENV") != "local" {
+	if os.Getenv("APP_ENV") != "dev" {
 		err := godotenv.Load()
 		if err != nil {
 			log.Fatalf("failed to load config: %v", err)
@@ -30,10 +30,14 @@ func main() {
 	serverAddress := os.Getenv("SERVER_ADDRESS")
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
+	mqttBrokerUser := os.Getenv("MQTT_BROKER_USER")
+	mqttBrokerPass := os.Getenv("MQTT_BROKER_PASS")
 
 	// Set MQTT broker URL if provided
 	if mqttBrokerURL != "" {
 		middleware.SetBrokerURL(mqttBrokerURL)
+		middleware.SetBrokerUser(mqttBrokerUser)
+		middleware.SetBrokerPass(mqttBrokerPass)
 	}
 
 	// initialize PostgreSQL

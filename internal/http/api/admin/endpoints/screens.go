@@ -38,6 +38,10 @@ func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 	r.GET("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.getContentForScreen))
 	r.POST("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.assignContentToScreen))
 
+	// screen <-> playlist
+	r.GET("/screens/:id/playlist", api.ResolveEndpointWithAuth(ctl.getPlaylistForScreen))
+	r.POST("/screens/:id/playlist", api.ResolveEndpointWithAuth(ctl.assignPlaylistToScreen))
+
 	// pairing
 	r.POST("/screens/pair", api.ResolveEndpointWithAuth(ctl.pairScreen))
 
@@ -369,6 +373,141 @@ func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User)
 	}
 
 	return nil, nil
+}
+
+func (t *TvController) getPlaylistForScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	screenID, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		log.Error().Err(err).Str("route", ctx.FullPath()).
+			Msg("Invalid screen ID in URL: could not convert to integer during playlist retrieval")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+	}
+
+	existingScreen, err := t.store.GetScreenByID(screenID)
+	if err != nil {
+		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
+			Msg("Failed to fetch screen: screen not found during playlist retrieval")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+	}
+
+	// Check if the user is the creator of the screen
+	if existingScreen.CreatedBy != user.ID {
+		log.Warn().Int("user_id", user.ID).Int("screen_id", screenID).
+			Msg("User attempted to access playlist for screen they do not own")
+		return nil, &api.Error{Code: http.StatusUnauthorized, Message: "unauthorized"}
+	}
+
+	// Get the currently assigned playlist for this screen
+	playlist, err := t.store.GetPlaylistForScreen(screenID)
+	if err != nil {
+		// If no playlist is assigned, return null instead of error
+		if err.Error() == "sql: no rows in result set" {
+			return map[string]interface{}{
+				"playlist": nil,
+			}, nil
+		}
+		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
+			Msg("Failed to fetch playlist for screen")
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "failed to fetch playlist"}
+	}
+
+	return map[string]interface{}{
+		"playlist": playlist,
+	}, nil
+}
+
+func (t *TvController) assignPlaylistToScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
+	screenID, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		log.Error().Err(err).Str("route", ctx.FullPath()).
+			Msg("Invalid screen ID in URL: could not convert to integer during playlist assignment")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
+	}
+
+	existingScreen, err := t.store.GetScreenByID(screenID)
+	if err != nil {
+		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
+			Msg("Failed to fetch screen: screen not found during playlist assignment")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
+	}
+
+	if existingScreen.CreatedBy != user.ID {
+		log.Warn().Int("screen_id", screenID).Int("requesting_user_id", user.ID).Int("screen_owner_id", existingScreen.CreatedBy).Str("route", ctx.FullPath()).
+			Msg("Unauthorized playlist assignment attempt: user does not own the screen")
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+	}
+
+	var request packets.AssignPlaylistToScreenRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Error().Err(err).Str("route", ctx.FullPath()).
+			Msg("Failed to bind JSON body during playlist assignment")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+	}
+
+	existingPlaylist, err := t.store.GetPlaylistByID(request.PlaylistID)
+	if err != nil {
+		log.Error().Err(err).Int("playlist_id", request.PlaylistID).Str("route", ctx.FullPath()).
+			Msg("Playlist ID not found during assignment to screen")
+		return nil, &api.Error{Code: http.StatusNotFound, Message: "playlist not found"}
+	}
+
+	if existingPlaylist.CreatedBy != user.ID {
+		log.Warn().Int("requesting_user_id", user.ID).Int("playlist_owner_id", existingPlaylist.CreatedBy).Int("playlist_id", existingPlaylist.ID).Str("route", ctx.FullPath()).
+			Msg("Unauthorized attempt to assign playlist: user does not own the playlist")
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+	}
+
+	if err := t.store.AssignPlaylistToScreen(screenID, request.PlaylistID); err != nil {
+		log.Error().Err(err).Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).Str("route", ctx.FullPath()).
+			Msg("Failed to assign playlist to screen")
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
+	}
+
+	log.Info().Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).
+		Msg("Successfully assigned playlist to screen")
+
+	// Try to send immediately if screen is connected
+	if existingScreen.DeviceID != nil {
+		// Get playlist content for TV client
+		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
+		if err != nil {
+			log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
+				Msg("Failed to retrieve playlist content for screen")
+			// Don't fail the request, just log the error
+		} else {
+			// Create simple response for TV client
+			contentList := make([]packets.TVContentItem, len(contentItems))
+			for i, item := range contentItems {
+				contentList[i] = packets.TVContentItem{
+					URL:      item.URL,
+					Duration: item.Duration,
+				}
+			}
+
+			response, err := json.Marshal(packets.TVPlaylistResponse{
+				PlaylistName: playlistName,
+				ContentList:  contentList,
+			})
+			if err != nil {
+				log.Error().Err(err).Str("route", ctx.FullPath()).
+					Msg("Failed to marshal playlist response")
+			} else {
+				// Try to send to TV via MQTT (non-blocking)
+				if err := middleware.SendMessageToScreen(*existingScreen.DeviceID, response); err != nil {
+					log.Warn().Err(err).Str("route", ctx.FullPath()).Int("screen_id", screenID).
+						Msg("Screen not connected - playlist will be sent when client connects")
+				} else {
+					log.Info().Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).Str("playlist_name", playlistName).
+						Msg("Successfully sent playlist to connected screen")
+				}
+			}
+		}
+	} else {
+		log.Info().Int("screen_id", screenID).
+			Msg("Screen not paired - playlist will be sent when client connects")
+	}
+
+	return gin.H{"message": "playlist assigned successfully"}, nil
 }
 
 func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Error) {
