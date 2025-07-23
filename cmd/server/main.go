@@ -29,7 +29,11 @@ func main() {
 	databaseUrl := os.Getenv("DATABASE_URL")
 	secretKey := os.Getenv("JWT_SECRET")
 	serverAddress := os.Getenv("SERVER_ADDRESS")
+
 	redisAddress := os.Getenv("REDIS_ADDRESS")
+	redisUsername := os.Getenv("REDIS_USERNAME")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	mqttBrokerUser := os.Getenv("MQTT_BROKER_USER")
@@ -86,7 +90,7 @@ func main() {
 		log.Fatalf("Failed to connect to db via sqlx: %v", err)
 	}
 	store := db.NewStore(sqlxDB)
-	redis.InitRedis(redisAddress)
+	redis.InitRedis(redisAddress, redisUsername, redisPassword)
 
 	// Initialize storage system
 	var storageSystem storage.Storage
