@@ -24,8 +24,8 @@ func NewTvController(store db.Store) *TvController {
 func RegisterPairingRoutes(r gin.IRoutes, store db.Store) {
 	ctl := NewTvController(store)
 
-	r.GET("/register", ctl.registerPairingCode)
-	r.GET("/socket", ctl.tvWebSocket)
+	r.POST("/register", ctl.registerPairingCode)
+	r.POST("/socket", ctl.tvWebSocket)
 }
 
 // registerPairingCode binds a JSON pairing request, checks that the screen isn’t already paired,
@@ -106,7 +106,7 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 	// Check for pending playlist assignments and send them
 	go func() {
 		// Get playlist content if one is assigned to this screen
-		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screen.ID)
+		playlistName, contentItems, err := t.store.GetPlaylistContentForScreen(screen.ID)
 		if err == nil && len(contentItems) > 0 {
 			log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
 				Msg("Sending pending playlist to newly connected device")
