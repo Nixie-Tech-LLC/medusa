@@ -6,7 +6,9 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -55,8 +57,36 @@ func NewSpacesStorage(endpoint, region, bucket, cdnURL, accessKey, secretKey str
 	}, nil
 }
 
+// normalizeFilename creates a unique, normalized filename without spaces
+func normalizeFilename(originalFilename string) string {
+	// Get file extension
+	ext := filepath.Ext(originalFilename)
+	baseName := strings.TrimSuffix(originalFilename, ext)
+
+	// Remove or replace problematic characters
+	// Replace spaces with underscores
+	baseName = strings.ReplaceAll(baseName, " ", "_")
+
+	// Remove or replace other problematic characters, keeping only alphanumeric, dash, underscore
+	reg := regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+	baseName = reg.ReplaceAllString(baseName, "")
+
+	// Ensure the filename isn't empty after cleaning
+	if baseName == "" {
+		baseName = "file"
+	}
+
+	// Add timestamp to make it unique and traceable
+	timestamp := time.Now().Format("20060102_150405")
+
+	// Construct final filename: basename_timestamp.ext
+	return fmt.Sprintf("%s_%s%s", baseName, timestamp, ext)
+}
+
 func (ls *LocalStorage) SaveFile(fileHeader *multipart.FileHeader, filename string) (string, error) {
-	uploadPath := filepath.Join(ls.uploadDir, filename)
+	normalizedFilename := normalizeFilename(filename)
+	log.Debug().Str("original", filename).Str("normalized", normalizedFilename).Msg("File upload normalized")
+	uploadPath := filepath.Join(ls.uploadDir, normalizedFilename)
 
 	// Ensure upload directory exists
 	if err := os.MkdirAll(ls.uploadDir, 0755); err != nil {
@@ -93,6 +123,9 @@ func (ls *LocalStorage) SaveFile(fileHeader *multipart.FileHeader, filename stri
 }
 
 func (ss *SpacesStorage) SaveFile(fileHeader *multipart.FileHeader, filename string) (string, error) {
+	normalizedFilename := normalizeFilename(filename)
+	log.Debug().Str("original", filename).Str("normalized", normalizedFilename).Msg("File upload normalized")
+
 	src, err := fileHeader.Open()
 	if err != nil {
 		return "", fmt.Errorf("failed to open uploaded file: %w", err)
@@ -104,10 +137,10 @@ func (ss *SpacesStorage) SaveFile(fileHeader *multipart.FileHeader, filename str
 		}
 	}(src)
 
-	key := fmt.Sprintf("uploads/%s", filename)
+	key := fmt.Sprintf("uploads/%s", normalizedFilename)
 
 	// Determine content type based on file extension
-	contentType := getContentType(filename)
+	contentType := getContentType(normalizedFilename)
 
 	_, err = ss.client.PutObject(&s3.PutObjectInput{
 		Bucket:      aws.String(ss.bucket),
