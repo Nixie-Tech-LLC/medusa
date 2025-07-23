@@ -199,10 +199,18 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	// decide duration
-	defaultDur := 5
+	// decide duration - use content's default duration if not specified
+	var defaultDur int
 	if req.Duration != nil {
 		defaultDur = *req.Duration
+	} else {
+		// Get the content to use its default duration
+		content, err := p.store.GetContentByID(req.ContentID)
+		if err != nil {
+			log.Printf("[playlist] add item: failed to get content: %v", err)
+			return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid content_id"}
+		}
+		defaultDur = content.DefaultDuration
 	}
 
 	// 1) fetch existing items so we can compute the next position
