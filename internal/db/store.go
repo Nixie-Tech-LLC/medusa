@@ -5,6 +5,12 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// ContentItem represents a content item with URL and duration
+type ContentItem struct {
+	URL      string `db:"url"`
+	Duration int    `db:"duration"`
+}
+
 // Store defines all operations against the database.
 type Store interface {
 	// user functions
@@ -49,6 +55,8 @@ type Store interface {
 	// screen ↔ playlist
 	AssignPlaylistToScreen(screenID, playlistID int) error
 	GetPlaylistForScreen(screenID int) (model.Playlist, error)
+	GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error)
+	GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error)
 }
 
 // pgStore is the SQL-backed implementation of Store.
@@ -161,11 +169,16 @@ func (s *pgStore) ReorderPlaylistItems(playlistID int, itemIDs []int) error {
 	return ReorderPlaylistItems(playlistID, itemIDs)
 }
 
-
 // @ Screen <-> Playlist
 func (s *pgStore) AssignPlaylistToScreen(screenID, playlistID int) error {
 	return AssignPlaylistToScreen(screenID, playlistID)
 }
 func (s *pgStore) GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 	return GetPlaylistForScreen(screenID)
+}
+func (s *pgStore) GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error) {
+	return GetScreensUsingPlaylist(playlistID)
+}
+func (s *pgStore) GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
+	return GetPlaylistContentForScreen(screenID)
 }

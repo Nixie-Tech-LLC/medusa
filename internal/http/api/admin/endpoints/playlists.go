@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"encoding/json"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/gin-gonic/gin"
 )
@@ -54,6 +56,58 @@ func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (
 	}
 
 	return out, nil
+}
+
+// notifyScreensPlaylistUpdated sends playlist updates to screens displaying the specified playlist
+func (p *PlaylistController) notifyScreensPlaylistUpdated(playlistID int) {
+	screens, err := p.store.GetScreensUsingPlaylist(playlistID)
+	if err != nil {
+		log.Error().Err(err).Int("playlist_id", playlistID).Msg("Failed to get screens for playlist notification")
+		return
+	}
+
+	if len(screens) == 0 {
+		log.Debug().Int("playlist_id", playlistID).Msg("No screens assigned to playlist")
+		return
+	}
+
+	// Get updated playlist data to send to screens
+	playlistName, contentItems, err := p.store.GetPlaylistContentForScreen(screens[0].ID)
+	if err != nil {
+		log.Error().Err(err).Int("playlist_id", playlistID).Msg("Failed to get playlist content for notification")
+		return
+	}
+
+	// Create TV playlist response format
+	contentList := make([]packets.TVContentItem, len(contentItems))
+	for i, item := range contentItems {
+		contentList[i] = packets.TVContentItem{
+			URL:      item.URL,
+			Duration: item.Duration,
+		}
+	}
+
+	response := packets.TVPlaylistResponse{
+		PlaylistName: playlistName,
+		ContentList:  contentList,
+	}
+
+	messageBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal playlist update message")
+		return
+	}
+
+	// Send message to each screen
+	for _, screen := range screens {
+		if screen.DeviceID != nil {
+			if err := middleware.SendMessageToScreen(*screen.DeviceID, messageBytes); err != nil {
+				log.Error().Err(err).Str("device_id", *screen.DeviceID).Int("playlist_id", playlistID).Msg("Failed to send playlist update to screen")
+			} else {
+				log.Info().Str("device_id", *screen.DeviceID).Int("playlist_id", playlistID).Str("playlist_name", playlistName).Msg("Sent playlist update notification to screen")
+			}
+		}
+	}
 }
 
 // createPlaylist binds and validates request, then persists a new playlist.
@@ -105,6 +159,9 @@ func (p *PlaylistController) updatePlaylist(ctx *gin.Context, user *model.User) 
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 
+	// Notify screens about playlist update
+	go p.notifyScreensPlaylistUpdated(id)
+
 	// return updated playlist
 	full, _ := p.store.GetPlaylistByID(id)
 	return mapPlaylist(full), nil
@@ -118,6 +175,10 @@ func (p *PlaylistController) deletePlaylist(ctx *gin.Context, user *model.User) 
 	if err != nil || pl.CreatedBy != user.ID {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
+
+	// Notify screens before deletion
+	go p.notifyScreensPlaylistUpdated(id)
+
 	if err := p.store.DeletePlaylist(id); err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
@@ -164,11 +225,13 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
 	}
 
+	// Notify screens about playlist update
+	go p.notifyScreensPlaylistUpdated(pid)
+
 	return mapItem(item), nil
 }
 
 // updateItem changes position or duration of an existing playlist item
-// updateItem changes position or duration of an existing playlist item.
 // TODO: simple test
 func (p *PlaylistController) updateItem(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	pid, _ := strconv.Atoi(ctx.Param("id"))
@@ -185,6 +248,9 @@ func (p *PlaylistController) updateItem(ctx *gin.Context, user *model.User) (any
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 
+	// Notify screens about playlist update
+	go p.notifyScreensPlaylistUpdated(pid)
+
 	return nil, nil
 }
 
@@ -200,6 +266,10 @@ func (p *PlaylistController) removeItem(ctx *gin.Context, user *model.User) (any
 	if err := p.store.RemovePlaylistItem(iid); err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
+
+	// Notify screens about playlist update
+	go p.notifyScreensPlaylistUpdated(pid)
+
 	return nil, nil
 }
 
@@ -245,6 +315,9 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 		log.Printf("[playlist] reorder: %v", err)
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not reorder items"}
 	}
+
+	// Notify screens about playlist update
+	go p.notifyScreensPlaylistUpdated(pid)
 
 	// return the newly-ordered list
 	return p.listItems(ctx, user)

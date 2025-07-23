@@ -167,9 +167,15 @@ func ReorderPlaylistItems(playlistID int, itemIDs []int) error {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			err := tx.Rollback()
+			if err != nil {
+				return
+			}
 		} else {
-			tx.Commit()
+			err := tx.Commit()
+			if err != nil {
+				return
+			}
 		}
 	}()
 
@@ -240,11 +246,6 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 		return model.Playlist{}, err
 	}
 	return GetPlaylistByID(pid)
-}
-
-type ContentItem struct {
-	URL      string `db:"url"`
-	Duration int    `db:"duration"`
 }
 
 // GetPlaylistContentForScreen returns playlist name and content URLs/durations for a screen
