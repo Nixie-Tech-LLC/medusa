@@ -33,8 +33,6 @@ func GetContentForScreen(screenID int) (*model.Content, error) {
 		`, screenID)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Error().Err(err).Msg("Failed to get content for screen")
-	}
-	{
 		return nil, sql.ErrNoRows
 	}
 	return &c, err
@@ -60,7 +58,7 @@ func CreateContent(
 		url,
 		defaultDuration,
 		createdBy,
-		); err != nil {
+	); err != nil {
 		log.Error().Err(err).Msg("Failed to create content for screen")
 		return model.Content{}, err
 	}
@@ -116,11 +114,11 @@ func UpdateContent(
 		SET
 		name             = COALESCE($2, name),
 		url              = COALESCE($3, url),
-		default_duration = COALESCE($5, default_duration),
+		default_duration = COALESCE($4, default_duration),
 		updated_at       = now()
 		WHERE id = $1;`,
 		id, name, url, defaultDuration,
-		)
+	)
 	log.Error().Err(err).Msg("Failed to update content")
 	return err
 }
@@ -130,4 +128,3 @@ func DeleteContent(id int) error {
 	log.Error().Err(err).Msg("Failed to delete content")
 	return err
 }
-
