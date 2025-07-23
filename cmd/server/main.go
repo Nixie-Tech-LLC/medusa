@@ -10,6 +10,7 @@ import (
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/Nixie-Tech-LLC/medusa/internal/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
@@ -33,6 +34,15 @@ func main() {
 	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	mqttBrokerUser := os.Getenv("MQTT_BROKER_USER")
 	mqttBrokerPass := os.Getenv("MQTT_BROKER_PASS")
+
+	// Storage configuration
+	useSpaces := os.Getenv("USE_SPACES") == "true"
+	spacesEndpoint := os.Getenv("SPACES_ENDPOINT")
+	spacesRegion := os.Getenv("SPACES_REGION")
+	spacesBucket := os.Getenv("SPACES_BUCKET")
+	spacesCDNURL := os.Getenv("SPACES_CDN_URL")
+	spacesAccessKey := os.Getenv("SPACES_ACCESS_KEY")
+	spacesSecretKey := os.Getenv("SPACES_SECRET_KEY")
 
 	// Set MQTT broker URL if provided
 	if mqttBrokerURL != "" {
@@ -77,6 +87,27 @@ func main() {
 	}
 	store := db.NewStore(sqlxDB)
 	redis.InitRedis(redisAddress)
+
+	// Initialize storage system
+	var storageSystem storage.Storage
+	if useSpaces {
+		spacesStorage, err := storage.NewSpacesStorage(
+			spacesEndpoint,
+			spacesRegion,
+			spacesBucket,
+			spacesCDNURL,
+			spacesAccessKey,
+			spacesSecretKey,
+		)
+		if err != nil {
+			log.Fatalf("failed to initialize Spaces storage: %v", err)
+		}
+		storageSystem = spacesStorage
+		log.Printf("Using DigitalOcean Spaces storage with CDN: %s", spacesCDNURL)
+	} else {
+		storageSystem = storage.NewLocalStorage("./uploads")
+		log.Printf("Using local file storage in ./uploads")
+	}
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 	authapi.RegisterAuthRoutes(admin, secretKey, store)
@@ -87,7 +118,7 @@ func main() {
 	protected := admin.Group("/")
 	protected.Use(middleware.JWTMiddleware(secretKey))
 	// apply JWTMiddleware for all the admin routes that follow
-	adminapi.RegisterContentRoutes(protected, store)
+	adminapi.RegisterContentRoutes(protected, store, storageSystem)
 	adminapi.RegisterScreenRoutes(protected, store)
 	adminapi.RegisterScheduleRoutes(protected)
 	adminapi.RegisterPlaylistRoutes(protected, store)
@@ -95,7 +126,10 @@ func main() {
 	tv := r.Group("/api/tv")
 	tvapi.RegisterPairingRoutes(tv, store)
 
-	r.Static("/uploads", "./uploads")
+	// Only serve static uploads directory when using local storage
+	if !useSpaces {
+		r.Static("/uploads", "./uploads")
+	}
 
 	// start
 	log.Printf("listening on %s", serverAddress)

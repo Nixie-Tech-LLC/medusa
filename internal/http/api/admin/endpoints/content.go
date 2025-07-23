@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	_ "path/filepath"
 	"strconv"
 	"time"
-	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,18 +14,20 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
+	"github.com/Nixie-Tech-LLC/medusa/internal/storage"
 )
 
 type ContentController struct {
-	store db.Store
+	store   db.Store
+	storage storage.Storage
 }
 
-func NewContentController(store db.Store) *ContentController {
-	return &ContentController{store: store}
+func NewContentController(store db.Store, storage storage.Storage) *ContentController {
+	return &ContentController{store: store, storage: storage}
 }
 
-func RegisterContentRoutes(router gin.IRoutes, store db.Store) {
-	ctl := NewContentController(store)
+func RegisterContentRoutes(router gin.IRoutes, store db.Store, storage storage.Storage) {
+	ctl := NewContentController(store, storage)
 	// require auth for all:
 	router.GET("/content/:id", api.ResolveEndpointWithAuth(ctl.getContent))
 	router.GET("/content", api.ResolveEndpointWithAuth(ctl.listContent))
@@ -120,9 +122,9 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "file is required"}
 	}
 
-	// save file to server (e.g. uploads directory)
-	uploadPath := filepath.Join("uploads", fileHeader.Filename)
-	if err := ctx.SaveUploadedFile(fileHeader, uploadPath); err != nil {
+	// save file using storage system
+	uploadPath, err := c.storage.SaveFile(fileHeader, fileHeader.Filename)
+	if err != nil {
 		log.Printf("[content] CreateContent failed: %v", err)
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not save file"}
 	}
@@ -152,7 +154,10 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 				log.Error().Msg("Failed to get screen by ID")
 				return
 			}
-			http.Get(fmt.Sprintf("%s/update", *screen.Location))
+			_, err = http.Get(fmt.Sprintf("%s/update", *screen.Location))
+			if err != nil {
+				return
+			}
 		}(*screenID)
 	}
 
@@ -166,7 +171,6 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 
 	return resp, nil
 }
-
 
 // updateContent handles PUT /content/:id
 func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
