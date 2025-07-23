@@ -54,6 +54,7 @@ func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any
 			Name:      x.Name,
 			Type:      x.Type,
 			URL:       x.URL,
+			Duration:  x.DefaultDuration,
 			CreatedAt: x.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -83,6 +84,7 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 		Name:      x.Name,
 		Type:      x.Type,
 		URL:       x.URL,
+		Duration:  x.DefaultDuration,
 		CreatedAt: x.CreatedAt.Format(time.RFC3339),
 	}
 
