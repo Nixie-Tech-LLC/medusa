@@ -106,7 +106,7 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 	// Check for pending playlist assignments and send them
 	go func() {
 		// Get playlist content if one is assigned to this screen
-		playlistName, contentItems, err := t.store.GetPlaylistContentForScreen(screen.ID)
+		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screen.ID)
 		if err == nil && len(contentItems) > 0 {
 			log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
 				Msg("Sending pending playlist to newly connected device")
