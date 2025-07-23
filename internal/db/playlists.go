@@ -283,3 +283,20 @@ func GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
 
 	return playlistName, items, nil
 }
+
+// GetScreensUsingPlaylist returns all screens that have the specified playlist assigned
+func GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error) {
+	var screens []model.Screen
+	err := DB.Select(&screens, `
+		SELECT s.id, s.device_id, s.name, s.location, s.paired, s.created_at, s.updated_at
+		FROM screens s
+		JOIN screen_playlists sp ON s.id = sp.screen_id
+		WHERE sp.playlist_id = $1 AND sp.active = true;`,
+		playlistID,
+	)
+	if err != nil {
+		log.Error().Err(err).Int("playlist_id", playlistID).Msg("Failed to get screens using playlist")
+		return nil, err
+	}
+	return screens, nil
+}
