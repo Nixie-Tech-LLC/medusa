@@ -24,8 +24,8 @@ func NewTvController(store db.Store) *TvController {
 func RegisterPairingRoutes(r gin.IRoutes, store db.Store) {
 	ctl := NewTvController(store)
 
-	r.POST("/register", ctl.registerPairingCode)
-	r.POST("/socket", ctl.tvWebSocket)
+	r.GET("/register", ctl.registerPairingCode)
+	r.GET("/socket", ctl.tvWebSocket)
 }
 
 // registerPairingCode binds a JSON pairing request, checks that the screen isn’t already paired,
