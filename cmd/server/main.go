@@ -28,6 +28,7 @@ func main() {
 	databaseUrl := os.Getenv("DATABASE_URL")
 	secretKey := os.Getenv("JWT_SECRET")
 	serverAddress := os.Getenv("SERVER_ADDRESS")
+	redisAddress := os.Getenv("REDIS_ADDRESS")
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	mqttBrokerUser := os.Getenv("MQTT_BROKER_USER")
@@ -75,7 +76,7 @@ func main() {
 		log.Fatalf("Failed to connect to db via sqlx: %v", err)
 	}
 	store := db.NewStore(sqlxDB)
-	redis.InitRedis()
+	redis.InitRedis(redisAddress)
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 	authapi.RegisterAuthRoutes(admin, secretKey, store)

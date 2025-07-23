@@ -10,9 +10,9 @@ import (
 
 var Rdb *redis.Client
 
-func InitRedis() {
+func InitRedis(redisAddr string) {
 	Rdb = redis.NewClient(&redis.Options{
-		Addr: "medusa-redis:6379",
+		Addr: redisAddr,
 	})
 }
 
