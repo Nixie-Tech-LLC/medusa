@@ -90,7 +90,9 @@ func UpdatePlaylist(
 		WHERE id = $1;`,
 		id, name, description,
 	)
-	log.Error().Err(err).Msg("Failed to update playlist")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update playlist")
+	}
 	return err
 }
 
