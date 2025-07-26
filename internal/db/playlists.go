@@ -90,7 +90,9 @@ func UpdatePlaylist(
 		WHERE id = $1;`,
 		id, name, description,
 	)
-	log.Error().Err(err).Msg("Failed to update playlist")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update playlist")
+	}
 	return err
 }
 
@@ -133,8 +135,10 @@ func UpdatePlaylistItem(
 		duration = COALESCE($3, duration)
 		WHERE id = $1;`,
 		itemID, position, duration,
-	)
-	log.Error().Err(err).Msg("Failed to update playlistItem")
+		)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update playlistItem")
+	}
 	return err
 }
 

@@ -17,7 +17,9 @@ func GetScreenByID(id int) (model.Screen, error) {
 		FROM screens
 		WHERE id = $1
 		`, id)
-	log.Error().Msg("failed to get screen by id")
+	if err != nil {
+		log.Error().Msg("failed to get screen by id")
+	}
 	return screen, err
 }
 
@@ -28,7 +30,9 @@ func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 		FROM screens
 		WHERE device_id = $1
 		`, deviceID)
-	log.Error().Msg("failed to get screen by device id")
+	if err != nil {
+		log.Error().Msg("failed to get screen by device id")
+	}
 	return screen, err
 }
 
@@ -53,7 +57,9 @@ func ListScreens() ([]model.Screen, error) {
 		FROM screens
 		ORDER BY id
 		`)
-	log.Error().Msg("failed to list screens")
+	if err != nil {
+		log.Error().Msg("failed to list screens")
+	}
 	return screens, err
 }
 
@@ -78,7 +84,9 @@ func UpdateScreen(id int, name, location *string) error {
 		updated_at = now()
 		WHERE id = $1
 		`, id, name, location)
-	log.Error().Msg("failed to update screen")
+	if err != nil {
+		log.Error().Msg("failed to update screen")
+	}
 	return err
 }
 
@@ -89,7 +97,9 @@ func PairScreen(id int) error {
 		updated_at = now()
 		WHERE id = $1
 		`, id)
-	log.Error().Msg("failed to pair screen")
+	if err != nil {
+		log.Error().Msg("failed to pair screen")
+	}
 	return err
 }
 
@@ -100,13 +110,17 @@ func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 		updated_at = now()
 		WHERE id = $1
 		`, screenID, deviceID)
-	log.Error().Msg("failed to assign device ID to screen")
+	if err != nil {
+		log.Error().Msg("failed to assign device ID to screen")
+	}
 	return err
 }
 
 func DeleteScreen(id int) error {
 	_, err := DB.Exec(`DELETE FROM screens WHERE id = $1`, id)
-	log.Error().Msg("failed to delete screen")
+	if err != nil {
+		log.Error().Msg("failed to delete screen")
+	}
 	return err
 }
 
@@ -116,7 +130,9 @@ func AssignScreenToUser(screenID, userID int) error {
 		VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
 		`, screenID, userID)
-	log.Error().Msg("failed to assign screen to user")
+	if err != nil {
+		log.Error().Msg("failed to assign screen to user")
+	}
 	return err
 }
 
