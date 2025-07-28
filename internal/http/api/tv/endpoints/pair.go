@@ -34,6 +34,7 @@ func RegisterPairingRoutes(r gin.IRoutes, store db.Store) {
 	r.POST("/socket", ctl.tvWebSocket)
 
 	r.HEAD("/ping", ctl.pingServer)
+	r.GET("/ping", ctl.pingServer)
 }
 
 // registerPairingCode binds a JSON pairing request, checks that the screen isn’t already paired,
