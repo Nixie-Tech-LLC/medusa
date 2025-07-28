@@ -11,10 +11,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"time"
 )
 
 type TvController struct {
 	store db.Store
+}
+
+type PairingData struct {
+	DeviceID string `json:"device_id"`
+	IsPaired bool   `json:"is_paired"`
 }
 
 func NewTvController(store db.Store) *TvController {
@@ -26,35 +32,62 @@ func RegisterPairingRoutes(r gin.IRoutes, store db.Store) {
 
 	r.POST("/register", ctl.registerPairingCode)
 	r.POST("/socket", ctl.tvWebSocket)
+
+	r.HEAD("/ping", ctl.pingServer)
 }
 
 // registerPairingCode binds a JSON pairing request, checks that the screen isn’t already paired,
 // stores the pairing code in Redis, and responds with the device ID or an error.
-func (t *TvController) registerPairingCode(c *gin.Context) {
-	var request packets.RegisterPairingCodeRequest
+func (t *TvController) registerPairingCode(ctx *gin.Context) {
+	var request packets.TVRequest
 
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		log.Error().Err(err).Msg("failed to bind JSON")
 		return
 	}
 
 	isPaired, err := db.IsScreenPairedByDeviceID(&request.DeviceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		log.Error().Err(err).Msg("failed to check if screen is paired by device")
 		return
 	}
 
 	if isPaired == true {
 		log.Error().Err(err).Msg("Screen is already paired")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Screen is already paired"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Screen is already paired"})
 		return
 	}
 
-	redis.Set(c, request.PairingCode, request.DeviceID, 0)
+	pairingData := PairingData{
+		DeviceID: request.DeviceID,
+		IsPaired: false,
+	}
 
-	c.JSON(http.StatusOK, packets.TVRequest{DeviceID: request.DeviceID})
+	marshalledPairingData, _ := json.Marshal(pairingData)
+
+	redis.Set(ctx, request.PairingCode, marshalledPairingData, 7*24*time.Hour)
+
+	ctx.JSON(http.StatusOK, packets.TVRequest{DeviceID: request.DeviceID})
+}
+
+// pingServer
+func (t *TvController) pingServer(ctx *gin.Context) {
+	pairingCode := ctx.Query("code")
+	var pairingData PairingData
+
+	redis.GetUnmarshalledJSON(ctx, pairingCode, &pairingData)
+
+	if pairingData.IsPaired == true {
+		log.Info().Str("pairingCode", pairingCode).Bool("value", pairingData.IsPaired)
+		ctx.JSON(http.StatusCreated, gin.H{})
+		return
+	} else {
+		log.Info().Str("pairingCode", pairingCode).Bool("value", pairingData.IsPaired)
+		ctx.JSON(http.StatusOK, gin.H{})
+		return
+	}
 }
 
 // tvWebSocket is an MQTT-based handler for TV device connections
@@ -141,5 +174,8 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 		}
 	}()
 
+	redis.Rdb.Del(c, request.PairingCode)
 	c.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
+
+	return
 }

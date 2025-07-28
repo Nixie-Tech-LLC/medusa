@@ -21,6 +21,11 @@ type TvController struct {
 	store db.Store
 }
 
+type PairingData struct {
+	DeviceID string `json:"device_id"`
+	IsPaired bool   `json:"is_paired"`
+}
+
 func NewTvController(store db.Store) *TvController {
 	return &TvController{store: store}
 }
@@ -511,24 +516,24 @@ func (t *TvController) assignPlaylistToScreen(ctx *gin.Context, user *model.User
 }
 
 func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Error) {
-
 	var request packets.PairScreenRequest
+	var pairingData PairingData
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		log.Error().Err(err).Str("route", ctx.FullPath()).
 			Msg("Invalid JSON in screen pairing request")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	// Assign the deviceID to the screen in Redis
 	key := request.PairingCode
-	deviceID, err := redis.Rdb.Get(ctx, key).Result()
-	if err != nil {
-		log.Error().Err(err).Str("pairing_code", key).Str("route", ctx.FullPath()).
-			Msg("Could not find device ID for pairing code in Redis")
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not find deviceID for pairing code"}
-	}
-	redis.Rdb.Del(ctx, key)
+	redis.GetUnmarshalledJSON(ctx, key, &pairingData)
+	deviceID := pairingData.DeviceID
 
+	pairingData.IsPaired = true
+	updatedPairingData, _ := json.Marshal(pairingData)
+
+	redis.Rdb.Set(ctx, key, updatedPairingData, 7*24*time.Hour)
+
+	// Assign the deviceID to the screen in Redis
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		log.Error().Err(err).Int("screen_id", request.ScreenID).Str("device_id", deviceID).Str("route", ctx.FullPath()).
 			Msg("Failed to assign device ID to screen during pairing")

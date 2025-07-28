@@ -44,7 +44,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 		WHERE device_id = $1
 		`, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
-		log.Error().Msg("failed to check if device is paired by device ID")
+		log.Info().Msg("No rows found when checking if device is paired")
 		return false, nil
 	}
 	return isPaired, err
@@ -135,4 +135,3 @@ func AssignScreenToUser(screenID, userID int) error {
 	}
 	return err
 }
-
