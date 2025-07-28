@@ -92,34 +92,39 @@ func (t *TvController) pingServer(ctx *gin.Context) {
 }
 
 // tvWebSocket is an MQTT-based handler for TV device connections
-func (t *TvController) tvWebSocket(c *gin.Context) {
+func (t *TvController) tvWebSocket(ctx *gin.Context) {
 	var request packets.TVRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
+	if err := ctx.ShouldBindJSON(&request); err != nil {
 		log.Error().Err(err).Msg("Error parsing request")
-		c.JSON(400, gin.H{"error": err.Error()})
+		ctx.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
 	screen, err := db.GetScreenByDeviceID(&request.DeviceID)
 	if err != nil {
 		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("Device ID not found")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
 		return
 	}
 
 	// Check if screen has a device ID assigned
 	if screen.DeviceID == nil {
 		log.Error().Str("deviceID", request.DeviceID).Msg("Screen found but device ID is nil")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "screen not properly paired"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "screen not properly paired"})
 		return
 	}
 
 	deviceID := *screen.DeviceID
 
+	// Check if client already exists and disconnect it
+	middleware.DisconnectTV(deviceID)
+
 	// Create MQTT client for this TV device
 	client, err := middleware.CreateMQTTClient(fmt.Sprintf("tv-%s", deviceID))
 	if err != nil {
 		log.Error().Err(err).Str("deviceID", deviceID).Msg("Failed to connect TV to MQTT")
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to MQTT"})
+		return
 	}
 
 	// Subscribe to device-specific topic
@@ -127,10 +132,11 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 	if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
 		log.Error().Err(err).Str("deviceID", deviceID).Str("topic", topic).Msg("Failed to subscribe to topic")
 		client.Disconnect(250)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
 		return
 	}
 
+	// Store the client in the global map
 	middleware.ClientMutex.Lock()
 	middleware.TvClients[deviceID] = client
 	middleware.ClientMutex.Unlock()
@@ -175,8 +181,8 @@ func (t *TvController) tvWebSocket(c *gin.Context) {
 		}
 	}()
 
-	redis.Rdb.Del(c, request.PairingCode)
-	c.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
+	redis.Rdb.Del(ctx, request.PairingCode)
+	ctx.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
 
 	return
 }

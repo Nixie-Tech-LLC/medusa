@@ -87,12 +87,6 @@ func (t *TvController) createScreen(ctx *gin.Context, user *model.User) (any, *a
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	_, err := middleware.CreateMQTTClient(request.Name)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create MQTT client")
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
-	}
-
 	screen, err := t.store.CreateScreen(request.Name, request.Location, user.ID)
 	if err != nil {
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create screen"}
