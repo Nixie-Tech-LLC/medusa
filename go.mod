@@ -3,6 +3,7 @@ module github.com/Nixie-Tech-LLC/medusa
 go 1.24.3
 
 require (
+	github.com/aws/aws-sdk-go v1.55.7
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/gin-contrib/cors v1.7.6
@@ -16,7 +17,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.55.7 // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

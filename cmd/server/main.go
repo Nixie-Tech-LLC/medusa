@@ -35,9 +35,6 @@ func main() {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
-	mqttBrokerURL := os.Getenv("MQTT_BROKER_URL")
-	mqttBrokerUser := os.Getenv("MQTT_BROKER_USER")
-	mqttBrokerPass := os.Getenv("MQTT_BROKER_PASS")
 
 	// Storage configuration
 	useSpaces := os.Getenv("USE_SPACES") == "true"
@@ -47,13 +44,6 @@ func main() {
 	spacesCDNURL := os.Getenv("SPACES_CDN_URL")
 	spacesAccessKey := os.Getenv("SPACES_ACCESS_KEY")
 	spacesSecretKey := os.Getenv("SPACES_SECRET_KEY")
-
-	// Set MQTT broker URL if provided
-	if mqttBrokerURL != "" {
-		middleware.SetBrokerURL(mqttBrokerURL)
-		middleware.SetBrokerUser(mqttBrokerUser)
-		middleware.SetBrokerPass(mqttBrokerPass)
-	}
 
 	// initialize PostgreSQL
 	if err := db.Init(databaseUrl); err != nil {
@@ -65,11 +55,6 @@ func main() {
 		log.Fatalf("db migrate: %v", err)
 	}
 
-	// initialize MQTT
-	if _, err := middleware.CreateMQTTClient("medusa-app-dev"); err != nil {
-		log.Fatalf("mqtt init: %v", err)
-	}
-
 	// set up gin router
 	r := gin.Default()
 
@@ -79,8 +64,8 @@ func main() {
 			return true
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "If-None-Match"},
+		ExposeHeaders:    []string{"Content-Length", "ETag"},
 		AllowCredentials: false,
 	}))
 

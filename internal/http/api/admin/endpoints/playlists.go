@@ -1,17 +1,19 @@
 package endpoints
 
 import (
-	"encoding/json"
-	"github.com/rs/zerolog/log"
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
-	"github.com/gin-gonic/gin"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
 type PlaylistController struct {
@@ -58,7 +60,8 @@ func (p *PlaylistController) listPlaylists(ctx *gin.Context, user *model.User) (
 	return out, nil
 }
 
-// notifyScreensPlaylistUpdated sends playlist updates to screens displaying the specified playlist
+// notifyScreensPlaylistUpdated invalidates the ETag for the specified playlist
+// This ensures clients get updated content on next poll instead of 304 Not Modified
 func (p *PlaylistController) notifyScreensPlaylistUpdated(playlistID int) {
 	screens, err := p.store.GetScreensUsingPlaylist(playlistID)
 	if err != nil {
@@ -71,43 +74,18 @@ func (p *PlaylistController) notifyScreensPlaylistUpdated(playlistID int) {
 		return
 	}
 
-	// Get updated playlist data to send to screens
-	playlistName, contentItems, err := p.store.GetPlaylistContentForScreen(screens[0].ID)
-	if err != nil {
-		log.Error().Err(err).Int("playlist_id", playlistID).Msg("Failed to get playlist content for notification")
-		return
+	// Invalidate ETag for the playlist (applies to all screens using this playlist)
+	etagKey := fmt.Sprintf("playlist:%d:etag", playlistID)
+	if err := redis.Rdb.Del(context.Background(), etagKey).Err(); err != nil {
+		log.Warn().Err(err).Int("playlist_id", playlistID).Str("etag_key", etagKey).
+			Msg("Failed to invalidate playlist ETag cache")
+	} else {
+		log.Debug().Int("playlist_id", playlistID).Str("etag_key", etagKey).
+			Msg("Invalidated playlist ETag cache")
 	}
 
-	// Create TV playlist response format
-	contentList := make([]packets.TVContentItem, len(contentItems))
-	for i, item := range contentItems {
-		contentList[i] = packets.TVContentItem{
-			URL:      item.URL,
-			Duration: item.Duration,
-		}
-	}
-
-	response := packets.TVPlaylistResponse{
-		PlaylistName: playlistName,
-		ContentList:  contentList,
-	}
-
-	messageBytes, err := json.Marshal(response)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal playlist update message")
-		return
-	}
-
-	// Send message to each screen
-	for _, screen := range screens {
-		if screen.DeviceID != nil {
-			if err := middleware.SendMessageToScreen(*screen.DeviceID, messageBytes); err != nil {
-				log.Error().Err(err).Str("device_id", *screen.DeviceID).Int("playlist_id", playlistID).Msg("Failed to send playlist update to screen")
-			} else {
-				log.Info().Str("device_id", *screen.DeviceID).Int("playlist_id", playlistID).Str("playlist_name", playlistName).Msg("Sent playlist update notification to screen")
-			}
-		}
-	}
+	log.Info().Int("playlist_id", playlistID).Int("affected_screens", len(screens)).
+		Msg("Playlist updated - invalidated playlist ETag for all affected screens")
 }
 
 // createPlaylist binds and validates request, then persists a new playlist.

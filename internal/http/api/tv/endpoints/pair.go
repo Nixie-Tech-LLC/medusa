@@ -1,17 +1,20 @@
 package endpoints
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
-	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"time"
+
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
 type TvController struct {
@@ -23,6 +26,19 @@ type PairingData struct {
 	IsPaired bool   `json:"is_paired"`
 }
 
+// generateContentETag creates an ETag based on playlist name and content items
+func generateContentETag(playlistName string, contentItems []db.ContentItem) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(playlistName))
+
+	for _, item := range contentItems {
+		hasher.Write([]byte(fmt.Sprintf("%s:%d", item.URL, item.Duration)))
+	}
+
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	return fmt.Sprintf(`"%s"`, hash[:16]) // Use first 16 chars for shorter ETag
+}
+
 func NewTvController(store db.Store) *TvController {
 	return &TvController{store: store}
 }
@@ -31,10 +47,11 @@ func RegisterPairingRoutes(r gin.IRoutes, store db.Store) {
 	ctl := NewTvController(store)
 
 	r.POST("/register", ctl.registerPairingCode)
-	r.POST("/socket", ctl.tvWebSocket)
 
 	r.HEAD("/ping", ctl.pingServer)
 	r.GET("/ping", ctl.pingServer)
+
+	r.GET("/content", ctl.getContent)
 }
 
 // registerPairingCode binds a JSON pairing request, checks that the screen isn’t already paired,
@@ -91,98 +108,91 @@ func (t *TvController) pingServer(ctx *gin.Context) {
 	}
 }
 
-// tvWebSocket is an MQTT-based handler for TV device connections
-func (t *TvController) tvWebSocket(ctx *gin.Context) {
-	var request packets.TVRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		log.Error().Err(err).Msg("Error parsing request")
-		ctx.JSON(400, gin.H{"error": err.Error()})
+// getContent retrieves content for a TV device with ETag support
+func (t *TvController) getContent(ctx *gin.Context) {
+	deviceID := ctx.Query("device_id")
+	if deviceID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "device_id is required"})
 		return
 	}
 
-	screen, err := db.GetScreenByDeviceID(&request.DeviceID)
+	screen, dbErr := db.GetScreenByDeviceID(&deviceID)
+	if dbErr != nil {
+		log.Error().Err(dbErr).Str("deviceID", deviceID).
+			Msg("Device ID not found in both Redis and database")
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+	screenID := screen.ID
+
+	// Get the playlist assigned to this screen first
+	playlist, err := db.GetPlaylistForScreen(screenID)
 	if err != nil {
-		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("Device ID not found")
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
+		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to get playlist for screen")
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "no playlist assigned to screen"})
 		return
 	}
 
-	// Check if screen has a device ID assigned
-	if screen.DeviceID == nil {
-		log.Error().Str("deviceID", request.DeviceID).Msg("Screen found but device ID is nil")
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "screen not properly paired"})
+	// Check for persistent ETag in Redis using playlist ID
+	etagKey := fmt.Sprintf("playlist:%d:etag", playlist.ID)
+	storedETag, err := redis.Rdb.Get(ctx, etagKey).Result()
+
+	// Check If-None-Match header against stored ETag
+	ifNoneMatch := ctx.GetHeader("If-None-Match")
+	if err == nil && storedETag != "" && ifNoneMatch == storedETag {
+		log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", storedETag).
+			Msg("Content not modified (cached playlist ETag), returning 304")
+		ctx.Header("ETag", storedETag)
+		ctx.Status(http.StatusNotModified)
 		return
 	}
 
-	deviceID := *screen.DeviceID
-
-	// Check if client already exists and disconnect it
-	middleware.DisconnectTV(deviceID)
-
-	// Create MQTT client for this TV device
-	client, err := middleware.CreateMQTTClient(fmt.Sprintf("tv-%s", deviceID))
+	playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
 	if err != nil {
-		log.Error().Err(err).Str("deviceID", deviceID).Msg("Failed to connect TV to MQTT")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to MQTT"})
+		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to retrieve playlist content for screen")
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "no content found"})
 		return
 	}
 
-	// Subscribe to device-specific topic
-	topic := fmt.Sprintf("tv/%s/commands", deviceID)
-	if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
-		log.Error().Err(err).Str("deviceID", deviceID).Str("topic", topic).Msg("Failed to subscribe to topic")
-		client.Disconnect(250)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
+	// Generate ETag based on current playlist content
+	currentETag := generateContentETag(playlistName, contentItems)
+
+	// Store the new ETag in Redis for future requests using playlist ID
+	if err := redis.Rdb.Set(ctx, etagKey, currentETag, 0).Err(); err != nil {
+		log.Warn().Err(err).Int("playlist_id", playlist.ID).Str("etag", currentETag).
+			Msg("Failed to store playlist ETag in Redis")
+	}
+
+	// Final check against newly generated ETag (in case content hasn't changed but ETag wasn't cached)
+	if ifNoneMatch == currentETag {
+		log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", currentETag).
+			Msg("Content not modified (generated playlist ETag), returning 304")
+		ctx.Header("ETag", currentETag)
+		ctx.Status(http.StatusNotModified)
 		return
 	}
 
-	// Store the client in the global map
-	middleware.ClientMutex.Lock()
-	middleware.TvClients[deviceID] = client
-	middleware.ClientMutex.Unlock()
-
-	log.Info().Str("deviceID", deviceID).Msg("Connected device to MQTT")
-
-	// Check for pending playlist assignments and send them
-	go func() {
-		// Get playlist content if one is assigned to this screen
-		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screen.ID)
-		if err == nil && len(contentItems) > 0 {
-			log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
-				Msg("Sending pending playlist to newly connected device")
-
-			// Create response for TV client
-			contentList := make([]adminpackets.TVContentItem, len(contentItems))
-			for i, item := range contentItems {
-				contentList[i] = adminpackets.TVContentItem{
-					URL:      item.URL,
-					Duration: item.Duration,
-				}
-			}
-
-			response, err := json.Marshal(adminpackets.TVPlaylistResponse{
-				PlaylistName: playlistName,
-				ContentList:  contentList,
-			})
-			if err != nil {
-				log.Error().Err(err).Str("deviceID", deviceID).
-					Msg("Failed to marshal pending playlist response")
-				return
-			}
-
-			// Send the playlist to the newly connected device
-			if err := middleware.SendMessageToScreen(deviceID, response); err != nil {
-				log.Error().Err(err).Str("deviceID", deviceID).
-					Msg("Failed to send pending playlist to device")
-			} else {
-				log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
-					Msg("Successfully sent pending playlist to device")
-			}
+	// Create response for TV client
+	contentList := make([]adminpackets.TVContentItem, len(contentItems))
+	for i, item := range contentItems {
+		contentList[i] = adminpackets.TVContentItem{
+			URL:      item.URL,
+			Duration: item.Duration,
 		}
-	}()
+	}
 
-	redis.Rdb.Del(ctx, request.PairingCode)
-	ctx.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
+	response := adminpackets.TVPlaylistResponse{
+		PlaylistName: playlistName,
+		ContentList:  contentList,
+	}
 
-	return
+	// Set ETag header and return content
+	ctx.Header("ETag", currentETag)
+	ctx.Header("Cache-Control", "no-cache") // Allow caching but require revalidation
+
+	log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", currentETag).
+		Int("content_items", len(contentItems)).
+		Msg("Returning content with playlist ETag")
+
+	ctx.JSON(http.StatusOK, response)
 }

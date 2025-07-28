@@ -1,7 +1,10 @@
 package endpoints
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
@@ -12,7 +15,6 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
@@ -24,6 +26,19 @@ type TvController struct {
 type PairingData struct {
 	DeviceID string `json:"device_id"`
 	IsPaired bool   `json:"is_paired"`
+}
+
+// generateContentETag creates an ETag based on playlist name and content items
+func generateContentETag(playlistName string, contentItems []db.ContentItem) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(playlistName))
+
+	for _, item := range contentItems {
+		hasher.Write([]byte(fmt.Sprintf("%s:%d", item.URL, item.Duration)))
+	}
+
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	return fmt.Sprintf(`"%s"`, hash[:16]) // Use first 16 chars for shorter ETag
 }
 
 func NewTvController(store db.Store) *TvController {
@@ -38,10 +53,6 @@ func RegisterScreenRoutes(r gin.IRoutes, store db.Store) {
 	r.GET("/screens/:id", api.ResolveEndpointWithAuth(ctl.getScreen))
 	r.PUT("/screens/:id", api.ResolveEndpointWithAuth(ctl.updateScreen))
 	r.DELETE("/screens/:id", api.ResolveEndpointWithAuth(ctl.deleteScreen))
-
-	// screen <-> content
-	r.GET("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.getContentForScreen))
-	r.POST("/screens/:id/content", api.ResolveEndpointWithAuth(ctl.assignContentToScreen))
 
 	// screen <-> playlist
 	r.GET("/screens/:id/playlist", api.ResolveEndpointWithAuth(ctl.getPlaylistForScreen))
@@ -251,129 +262,6 @@ func (t *TvController) assignScreenToUser(ctx *gin.Context, user *model.User) (a
 	return nil, nil
 }
 
-func (t *TvController) getContentForScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
-
-	screenID, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		log.Error().Err(err).Str("route", ctx.FullPath()).
-			Msg("Invalid screen ID in URL: could not convert to integer during get content request")
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
-	}
-
-	existing, err := t.store.GetScreenByID(screenID)
-	if err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-			Msg("Database query failed: screen not found during get content request")
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
-	}
-
-	if existing.CreatedBy != user.ID {
-		log.Warn().Int("screen_id", existing.ID).Int("requesting_user_id", user.ID).Int("screen_owner_id", existing.CreatedBy).Str("route", ctx.FullPath()).
-			Msg("Unauthorized access attempt: user is not the creator of the screen")
-		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
-	}
-
-	content, err := t.store.GetContentForScreen(screenID)
-	if err != nil {
-		log.Info().Int("screen_id", screenID).Str("route", ctx.FullPath()).
-			Msg("No content assigned to screen")
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "no content assigned"}
-	}
-
-	return packets.ContentResponse{
-		ID:        content.ID,
-		Name:      content.Name,
-		Type:      content.Type,
-		URL:       content.URL,
-		CreatedAt: content.CreatedAt.Format(time.RFC3339),
-		//do we need a log here?
-	}, nil
-}
-
-func (t *TvController) assignContentToScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
-
-	screenID, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		log.Error().Err(err).Str("route", ctx.FullPath()).
-			Msg("Invalid screen ID in URL: could not convert to integer during content assignment")
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid id"}
-	}
-
-	existingScreen, err := t.store.GetScreenByID(screenID)
-	if err != nil {
-		log.Error().
-			Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-			Msg("Failed to fetch screen: screen not found during content assignment")
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "screen not found"}
-	}
-
-	if existingScreen.CreatedBy != user.ID {
-		log.Warn().Int("screen_id", screenID).Int("requesting_user_id", user.ID).Int("screen_owner_id", existingScreen.CreatedBy).Str("route", ctx.FullPath()).
-			Msg("Unauthorized content assignment attempt: user does not own the screen")
-		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
-	}
-
-	var request packets.AssignContentToScreenRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		log.Error().Err(err).Str("route", ctx.FullPath()).
-			Msg("Failed to bind JSON body during content assignment")
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
-	}
-
-	existingContent, err := t.store.GetContentByID(request.ContentID)
-	if err != nil {
-		log.Error().Err(err).Int("content_id", request.ContentID).Str("route", ctx.FullPath()).
-			Msg("Content ID not found during assignment to screen")
-		return nil, &api.Error{Code: http.StatusNotFound, Message: "content not found"}
-	}
-
-	if existingContent.CreatedBy != user.ID {
-		log.Warn().Int("requesting_user_id", user.ID).Int("content_owner_id", existingContent.CreatedBy).Int("content_id", existingContent.ID).Str("route", ctx.FullPath()).
-			Msg("Unauthorized attempt to assign content: user does not own the content")
-		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
-	}
-
-	if err := t.store.AssignContentToScreen(screenID, request.ContentID); err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Int("content_id", request.ContentID).Str("route", ctx.FullPath()).
-			Msg("Failed to assign content to screen")
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
-	}
-
-	content, err := t.store.GetContentForScreen(screenID)
-	log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-		Msg("Failed to retrieve assigned content for screen")
-	if err != nil {
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
-	}
-
-	screen, err := t.store.GetScreenByID(screenID)
-	if err != nil || screen.DeviceID == nil {
-		log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-			Msg("Failed to retrieve screen or missing device ID during message dispatch")
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "screen does not exist"}
-	}
-
-	response, err := json.Marshal(packets.ContentResponse{
-		ID:        content.ID,
-		Name:      content.Name,
-		Type:      content.Type,
-		URL:       content.URL,
-		CreatedAt: content.CreatedAt.String(),
-	})
-
-	if err == nil {
-		err := middleware.SendMessageToScreen(*screen.DeviceID, response)
-		log.Error().Err(err).Msg("Failed to send message to screen")
-		if err != nil {
-			log.Error().Err(err).Str("route", ctx.FullPath()).Int("screen_id", screenID).
-				Msg("Failed to send content update message to screen device")
-			return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
-		}
-	}
-
-	return nil, nil
-}
-
 func (t *TvController) getPlaylistForScreen(ctx *gin.Context, user *model.User) (any, *api.Error) {
 	screenID, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
@@ -456,55 +344,39 @@ func (t *TvController) assignPlaylistToScreen(ctx *gin.Context, user *model.User
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
+	// Get the old playlist before assignment for ETag invalidation
+	oldPlaylist, oldErr := t.store.GetPlaylistForScreen(screenID)
+
 	if err := t.store.AssignPlaylistToScreen(screenID, request.PlaylistID); err != nil {
 		log.Error().Err(err).Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).Str("route", ctx.FullPath()).
 			Msg("Failed to assign playlist to screen")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: err.Error()}
 	}
 
+	// Invalidate ETag cache for both old and new playlists since assignments have changed
+	if oldErr == nil {
+		oldEtagKey := fmt.Sprintf("playlist:%d:etag", oldPlaylist.ID)
+		if err := redis.Rdb.Del(ctx, oldEtagKey).Err(); err != nil {
+			log.Warn().Err(err).Int("old_playlist_id", oldPlaylist.ID).Str("etag_key", oldEtagKey).
+				Msg("Failed to invalidate old playlist ETag cache after assignment")
+		} else {
+			log.Debug().Int("old_playlist_id", oldPlaylist.ID).Str("etag_key", oldEtagKey).
+				Msg("Invalidated old playlist ETag cache after assignment")
+		}
+	}
+
+	// Invalidate ETag for the new playlist
+	newEtagKey := fmt.Sprintf("playlist:%d:etag", request.PlaylistID)
+	if err := redis.Rdb.Del(ctx, newEtagKey).Err(); err != nil {
+		log.Warn().Err(err).Int("new_playlist_id", request.PlaylistID).Str("etag_key", newEtagKey).
+			Msg("Failed to invalidate new playlist ETag cache after assignment")
+	} else {
+		log.Debug().Int("new_playlist_id", request.PlaylistID).Str("etag_key", newEtagKey).
+			Msg("Invalidated new playlist ETag cache after assignment")
+	}
+
 	log.Info().Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).
 		Msg("Successfully assigned playlist to screen")
-
-	// Try to send immediately if screen is connected
-	if existingScreen.DeviceID != nil {
-		// Get playlist content for TV client
-		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
-		if err != nil {
-			log.Error().Err(err).Int("screen_id", screenID).Str("route", ctx.FullPath()).
-				Msg("Failed to retrieve playlist content for screen")
-			// Don't fail the request, just log the error
-		} else {
-			// Create simple response for TV client
-			contentList := make([]packets.TVContentItem, len(contentItems))
-			for i, item := range contentItems {
-				contentList[i] = packets.TVContentItem{
-					URL:      item.URL,
-					Duration: item.Duration,
-				}
-			}
-
-			response, err := json.Marshal(packets.TVPlaylistResponse{
-				PlaylistName: playlistName,
-				ContentList:  contentList,
-			})
-			if err != nil {
-				log.Error().Err(err).Str("route", ctx.FullPath()).
-					Msg("Failed to marshal playlist response")
-			} else {
-				// Try to send to TV via MQTT (non-blocking)
-				if err := middleware.SendMessageToScreen(*existingScreen.DeviceID, response); err != nil {
-					log.Warn().Err(err).Str("route", ctx.FullPath()).Int("screen_id", screenID).
-						Msg("Screen not connected - playlist will be sent when client connects")
-				} else {
-					log.Info().Int("screen_id", screenID).Int("playlist_id", request.PlaylistID).Str("playlist_name", playlistName).
-						Msg("Successfully sent playlist to connected screen")
-				}
-			}
-		}
-	} else {
-		log.Info().Int("screen_id", screenID).
-			Msg("Screen not paired - playlist will be sent when client connects")
-	}
 
 	return gin.H{"message": "playlist assigned successfully"}, nil
 }
@@ -527,7 +399,7 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Er
 
 	redis.Rdb.Set(ctx, key, updatedPairingData, 7*24*time.Hour)
 
-	// Assign the deviceID to the screen in Redis
+	// Assign the deviceID to the screen in database
 	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		log.Error().Err(err).Int("screen_id", request.ScreenID).Str("device_id", deviceID).Str("route", ctx.FullPath()).
 			Msg("Failed to assign device ID to screen during pairing")
@@ -539,6 +411,9 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.Er
 			Msg("Failed to mark screen as paired in database")
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not update screen"}
 	}
+
+	log.Info().Str("device_id", deviceID).Int("screen_id", request.ScreenID).
+		Msg("Successfully paired screen and stored device mapping in Redis")
 
 	return gin.H{"success": "screen paired successfully"}, nil
 }

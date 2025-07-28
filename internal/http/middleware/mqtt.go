@@ -2,8 +2,14 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
+	"github.com/gin-gonic/gin"
+	"net/http"
 	"sync"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -159,4 +165,100 @@ func CleanupMQTT() {
 		MqttClient.Disconnect(250)
 		log.Info().Msg("MQTT client disconnected")
 	}
+}
+
+// tvWebSocket is an MQTT-based handler for TV device connections
+func tvWebSocket(ctx *gin.Context) {
+	var request packets.TVRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Error().Err(err).Msg("Error parsing request")
+		ctx.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	screen, err := db.GetScreenByDeviceID(&request.DeviceID)
+	if err != nil {
+		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("Device ID not found")
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized device"})
+		return
+	}
+
+	// Check if screen has a device ID assigned
+	if screen.DeviceID == nil {
+		log.Error().Str("deviceID", request.DeviceID).Msg("Screen found but device ID is nil")
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "screen not properly paired"})
+		return
+	}
+
+	deviceID := *screen.DeviceID
+
+	// Check if client already exists and disconnect it
+	DisconnectTV(deviceID)
+
+	// Create MQTT client for this TV device
+	client, err := CreateMQTTClient(fmt.Sprintf("tv-%s", deviceID))
+	if err != nil {
+		log.Error().Err(err).Str("deviceID", deviceID).Msg("Failed to connect TV to MQTT")
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to MQTT"})
+		return
+	}
+
+	// Subscribe to device-specific topic
+	topic := fmt.Sprintf("tv/%s/commands", deviceID)
+	if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
+		log.Error().Err(err).Str("deviceID", deviceID).Str("topic", topic).Msg("Failed to subscribe to topic")
+		client.Disconnect(250)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to subscribe to MQTT topic"})
+		return
+	}
+
+	// Store the client in the global map
+	ClientMutex.Lock()
+	TvClients[deviceID] = client
+	ClientMutex.Unlock()
+
+	log.Info().Str("deviceID", deviceID).Msg("Connected device to MQTT")
+
+	// Check for pending playlist assignments and send them
+	go func() {
+		// Get playlist content if one is assigned to this screen
+		playlistName, contentItems, err := db.GetPlaylistContentForScreen(screen.ID)
+		if err == nil && len(contentItems) > 0 {
+			log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
+				Msg("Sending pending playlist to newly connected device")
+
+			// Create response for TV client
+			contentList := make([]adminpackets.TVContentItem, len(contentItems))
+			for i, item := range contentItems {
+				contentList[i] = adminpackets.TVContentItem{
+					URL:      item.URL,
+					Duration: item.Duration,
+				}
+			}
+
+			response, err := json.Marshal(adminpackets.TVPlaylistResponse{
+				PlaylistName: playlistName,
+				ContentList:  contentList,
+			})
+			if err != nil {
+				log.Error().Err(err).Str("deviceID", deviceID).
+					Msg("Failed to marshal pending playlist response")
+				return
+			}
+
+			// Send the playlist to the newly connected device
+			if err := SendMessageToScreen(deviceID, response); err != nil {
+				log.Error().Err(err).Str("deviceID", deviceID).
+					Msg("Failed to send pending playlist to device")
+			} else {
+				log.Info().Str("deviceID", deviceID).Str("playlist_name", playlistName).
+					Msg("Successfully sent pending playlist to device")
+			}
+		}
+	}()
+
+	redis.Rdb.Del(ctx, request.PairingCode)
+	ctx.JSON(http.StatusOK, gin.H{"success": "device connected successfully"})
+
+	return
 }
