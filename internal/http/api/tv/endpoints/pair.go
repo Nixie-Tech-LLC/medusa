@@ -36,7 +36,8 @@ func generateContentETag(playlistName string, contentItems []db.ContentItem) str
 	}
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
-	return fmt.Sprintf(`"%s"`, hash[:16]) // Use first 16 chars for shorter ETag
+	// Use full hash without quotes to avoid proxy issues - quotes will be added by HTTP header
+	return hash[:24] // Use 24 chars to reduce collision probability
 }
 
 func NewTvController(store db.Store) *TvController {
@@ -139,10 +140,25 @@ func (t *TvController) getContent(ctx *gin.Context) {
 
 	// Check If-None-Match header against stored ETag
 	ifNoneMatch := ctx.GetHeader("If-None-Match")
-	if err == nil && storedETag != "" && ifNoneMatch == storedETag {
-		log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", storedETag).
+	// Also check custom header to bypass proxy ETag modification
+	customETag := ctx.GetHeader("X-If-None-Match")
+	if customETag != "" {
+		ifNoneMatch = customETag
+	}
+
+	// Handle ETag comparison - remove quotes for comparison if present
+	clientETag := ifNoneMatch
+	if len(clientETag) >= 2 && clientETag[0] == '"' && clientETag[len(clientETag)-1] == '"' {
+		clientETag = clientETag[1 : len(clientETag)-1]
+	}
+
+	if err == nil && storedETag != "" && clientETag == storedETag {
+		quotedStoredETag := fmt.Sprintf(`"%s"`, storedETag)
+		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
+			Str("stored_etag", storedETag).Str("client_etag", ifNoneMatch).
 			Msg("Content not modified (cached playlist ETag), returning 304")
-		ctx.Header("ETag", storedETag)
+		ctx.Header("ETag", quotedStoredETag)
+		ctx.Header("X-Content-ETag", storedETag)
 		ctx.Status(http.StatusNotModified)
 		return
 	}
@@ -164,10 +180,13 @@ func (t *TvController) getContent(ctx *gin.Context) {
 	}
 
 	// Final check against newly generated ETag (in case content hasn't changed but ETag wasn't cached)
-	if ifNoneMatch == currentETag {
-		log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", currentETag).
+	if clientETag == currentETag {
+		quotedCurrentETag := fmt.Sprintf(`"%s"`, currentETag)
+		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
+			Str("generated_etag", currentETag).Str("client_etag", ifNoneMatch).
 			Msg("Content not modified (generated playlist ETag), returning 304")
-		ctx.Header("ETag", currentETag)
+		ctx.Header("ETag", quotedCurrentETag)
+		ctx.Header("X-Content-ETag", currentETag)
 		ctx.Status(http.StatusNotModified)
 		return
 	}
@@ -186,11 +205,14 @@ func (t *TvController) getContent(ctx *gin.Context) {
 		ContentList:  contentList,
 	}
 
-	// Set ETag header and return content
-	ctx.Header("ETag", currentETag)
-	ctx.Header("Cache-Control", "no-cache") // Allow caching but require revalidation
+	// Set ETag header with proper quoting for HTTP spec compliance
+	quotedETag := fmt.Sprintf(`"%s"`, currentETag)
+	ctx.Header("ETag", quotedETag)
+	ctx.Header("X-Content-ETag", currentETag) // Custom header without quotes to bypass proxy modification
+	ctx.Header("Cache-Control", "no-cache")   // Allow caching but require revalidation
 
-	log.Debug().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).Str("etag", currentETag).
+	log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
+		Str("etag", quotedETag).Str("raw_etag", currentETag).
 		Int("content_items", len(contentItems)).
 		Msg("Returning content with playlist ETag")
 

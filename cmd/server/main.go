@@ -64,8 +64,8 @@ func main() {
 			return true
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "If-None-Match"},
-		ExposeHeaders:    []string{"Content-Length", "ETag"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "If-None-Match", "X-If-None-Match"},
+		ExposeHeaders:    []string{"Content-Length", "ETag", "X-Content-ETag"},
 		AllowCredentials: false,
 	}))
 
