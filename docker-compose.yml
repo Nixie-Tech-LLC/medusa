@@ -1,18 +1,18 @@
 services:
-#  postgres:
-#    image: postgres:13
-#    container_name: medusa-postgres
-#    restart: always
-#    environment:
-#      POSTGRES_USER: medusa_user
-#      POSTGRES_PASSWORD: mysecretpassword
-#      POSTGRES_DB: medusa_dev
-#    ports:
-#      - "5433:5432"
-#    volumes:
-#      - pgdata:/var/lib/postgresql/data
-#    networks:
-#      - mqtt-network
+  postgres:
+    image: postgres:13
+    container_name: medusa-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: medusa_user
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: medusa_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - mqtt-network
     
   redis:
     image: redis:8.0
@@ -27,20 +27,6 @@ services:
     networks:
       - mqtt-network
 
-#  mqtt:
-#    image: eclipse-mosquitto
-#    container_name: medusa-mqtt
-#    ports:
-#      - "1883:1883" #default mqtt port
-#      - "9001:9001" #default mqtt port for websockets
-#    volumes:
-#      - ./config:/mosquitto/config:rw
-#      - ./data:/mosquitto/data:rw
-#      - ./log:/mosquitto/log:rw
-#    restart: unless-stopped
-#    networks:
-#      - mqtt-network
-
   medusa:
     build:
       context: .
@@ -48,19 +34,15 @@ services:
     container_name: medusa-app
     env_file: MEDUSA_DEV.env
     depends_on:
-      - redis
+      - postgres
     ports:
       - "8080:8080"
     networks:
       - mqtt-network
 
 volumes:
-#  pgdata:
+  pgdata:
   redis_data:
-#  air-cache:
-#  config:
-#  data:
-#  log:
 
 networks:
   mqtt-network:
