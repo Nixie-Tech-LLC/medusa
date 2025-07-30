@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS content (
     name        TEXT NOT NULL,
     type        TEXT NOT NULL,
     url         TEXT NOT NULL,
+    resolution_width       INT,
+    resolution_height      INT,
     created_by  INT NOT NULL REFERENCES users(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
