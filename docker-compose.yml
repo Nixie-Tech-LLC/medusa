@@ -11,6 +11,8 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - mqtt-network
     
   redis:
     image: redis:8.0
@@ -22,6 +24,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - mqtt-network
 
   medusa:
     build:
@@ -29,14 +33,14 @@ services:
       dockerfile: Dockerfile
     container_name: medusa-app
     env_file: MEDUSA_LOCAL.env
-    depends_on:
-      - postgres
-      - redis
     ports:
       - "8080:8080"
+    networks:
+      - mqtt-network
 
 volumes:
   pgdata:
   redis_data:
-  air-cache:
 
+networks:
+  mqtt-network:

@@ -1,6 +1,7 @@
 package endpoints
 
 import (
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
 
@@ -40,8 +41,14 @@ func RegisterSessionRoutes(r gin.IRoutes, jwtSecret string, store db.Store) {
 // POST /api/admin/auth/signup
 func (a *AccountManager) userSignup(ctx *gin.Context) (any, *api.Error) {
 	var request packets.SignupRequest
+
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+	}
+
+	if existing, _ := a.store.GetUserByEmail(request.Email); existing != nil {
+		log.Printf("Email conflict: %s already registered", request.Email)
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "Email already registered, please sign up with a different email"}
 	}
 
 	if existing, _ := a.store.GetUserByEmail(request.Email); existing != nil {

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS screens (
     id SERIAL PRIMARY KEY,
-    device_id TEXT NOT NULL UNIQUE,
+    device_id TEXT UNIQUE,
     name TEXT NOT NULL,
     location TEXT,
     paired BOOLEAN NOT NULL DEFAULT false,
@@ -25,8 +25,6 @@ CREATE TABLE IF NOT EXISTS schedules (
     end_time TIMESTAMP NOT NULL,
     content_url TEXT NOT NULL
 );
-
-
 
 CREATE TABLE IF NOT EXISTS screen_assignments (
     screen_id INT REFERENCES screens(id),
@@ -48,7 +46,7 @@ CREATE TABLE IF NOT EXISTS content (
 CREATE TABLE IF NOT EXISTS screen_contents (
     screen_id INT REFERENCES screens(id) ON DELETE CASCADE,
     content_id INT REFERENCES content(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(), 
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
     PRIMARY KEY (screen_id)
 );
 
@@ -68,7 +66,7 @@ CREATE TABLE IF NOT EXISTS playlist_items (
     playlist_id INT REFERENCES playlists(id) ON DELETE CASCADE,
     content_id  INT REFERENCES content(id),
     position    INT NOT NULL,            -- ordering
-    duration    INT,                     -- override (seconds); NULL = use content.default_duration
+    duration    INT NOT NULL DEFAULT 5,                     -- override (seconds); NULL = use content.default_duration
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uniq_order_per_playlist UNIQUE(playlist_id, position)
 );

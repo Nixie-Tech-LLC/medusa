@@ -1,5 +1,4 @@
 package packets
-
 // RESPONSES FOR /api/tv/screens/*
 
 // screenResponse mirrors model.Screen but flattens times to RFC3339
