@@ -2,11 +2,10 @@ package packets
 
 // CreateContentRequest Request for creating new content; optional ScreenID to immediately show.
 type CreateContentRequest struct {
-	Name            string `json:"name"  binding:"required"`
-	Type            string `json:"type"  binding:"required"`
-	URL             string `json:"url"   binding:"required,url"`
-	DefaultDuration int    `json:"default_duration" binding:"required"`
-	ScreenID        *int   `json:"screen_id"`
+	Name     string `json:"name"  binding:"required"`
+	Type     string `json:"type"  binding:"required"`
+	URL      string `json:"url"   binding:"required,url"`
+	ScreenID *int   `json:"screen_id"`
 }
 
 type CreateScreenRequest struct {
@@ -33,10 +32,9 @@ type PairScreenRequest struct {
 }
 
 type UpdateContentRequest struct {
-	Name            *string `json:"name"`
-	Type            *string `json:"type"`
-	URL             *string `json:"url"`
-	DefaultDuration *int    `json:"default_duration"`
+	Name *string `json:"name"`
+	Type *string `json:"type"`
+	URL  *string `json:"url"`
 }
 
 type CreatePlaylistRequest struct {
@@ -50,9 +48,9 @@ type UpdatePlaylistRequest struct {
 }
 
 type AddPlaylistItemRequest struct {
-	ContentID int  `json:"content_id" binding:"required"`
-	Position  int  `json:"position"`
-	Duration  *int `json:"duration"` // seconds; nil = use content.default_duration
+	ContentID int `json:"content_id" binding:"required"`
+	Position  int `json:"position"`
+	Duration  int `json:"duration" binding:"required"` // seconds; required for playlist items
 }
 
 type UpdatePlaylistItemRequest struct {

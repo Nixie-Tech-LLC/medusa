@@ -26,7 +26,7 @@ func AssignContentToScreen(screenID, contentID int) error {
 func GetContentForScreen(screenID int) (*model.Content, error) {
 	var c model.Content
 	err := DB.Get(&c, `
-		SELECT c.id, c.name, c.type, c.url, c.created_at
+		SELECT c.id, c.name, c.type, c.url, c.created_at, c.created_by, c.updated_at
 		FROM content c
 		JOIN screen_contents sc ON sc.content_id = c.id
 		WHERE sc.screen_id = $1
@@ -40,23 +40,21 @@ func GetContentForScreen(screenID int) (*model.Content, error) {
 
 func CreateContent(
 	name, typ, url string,
-	defaultDuration int,
 	createdBy int,
 ) (model.Content, error) {
 	var c model.Content
 	query := `
 	INSERT INTO content
-	(name, type, url, default_duration, created_by, created_at, updated_at)
+	(name, type, url, created_by, created_at, updated_at)
 	VALUES
-	($1,   $2,   $3,  $4,              $5,         now(),     now())
+	($1,   $2,   $3,  $4,         now(),     now())
 	RETURNING
-	id, name, type, url, default_duration, created_by, created_at,  updated_at;`
+	id, name, type, url, created_by, created_at, updated_at;`
 
 	if err := DB.Get(&c, query,
 		name,
 		typ,
 		url,
-		defaultDuration,
 		createdBy,
 	); err != nil {
 		log.Error().Err(err).Msg("Failed to create content for screen")
@@ -69,7 +67,7 @@ func GetContentByID(id int) (model.Content, error) {
 	var c model.Content
 	query := `
 	SELECT
-	id, name, type, url, default_duration, created_by, created_at, updated_at
+	id, name, type, url, created_by, created_at, updated_at
 	FROM content
 	WHERE id = $1;`
 
@@ -90,7 +88,6 @@ func ListContent() ([]model.Content, error) {
 	name,
 	type,
 	url,
-	default_duration,
 	created_by,
 	created_at,
 	updated_at
@@ -107,17 +104,15 @@ func ListContent() ([]model.Content, error) {
 func UpdateContent(
 	id int,
 	name, url *string,
-	defaultDuration *int,
 ) error {
 	_, err := DB.Exec(`
 		UPDATE content
 		SET
-		name             = COALESCE($2, name),
-		url              = COALESCE($3, url),
-		default_duration = COALESCE($4, default_duration),
-		updated_at       = now()
+		name       = COALESCE($2, name),
+		url        = COALESCE($3, url),
+		updated_at = now()
 		WHERE id = $1;`,
-		id, name, url, defaultDuration,
+		id, name, url,
 	)
 	log.Error().Err(err).Msg("Failed to update content")
 	return err

@@ -54,7 +54,6 @@ func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any
 			Name:      x.Name,
 			Type:      x.Type,
 			URL:       x.URL,
-			Duration:  x.DefaultDuration,
 			CreatedAt: x.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -84,7 +83,6 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 		Name:      x.Name,
 		Type:      x.Type,
 		URL:       x.URL,
-		Duration:  x.DefaultDuration,
 		CreatedAt: x.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -97,15 +95,9 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 	// bind form fields
 	name := ctx.PostForm("name")
 	typeVal := ctx.PostForm("type")
-	durationStr := ctx.PostForm("default_duration")
-	if name == "" || typeVal == "" || durationStr == "" {
+	if name == "" || typeVal == "" {
 		log.Printf("[content] CreateContent failed: missing required form fields")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "missing required form fields"}
-	}
-	defaultDuration, err := strconv.Atoi(durationStr)
-	if err != nil {
-		log.Printf("[content] CreateContent failed: %v", err)
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid default_duration"}
 	}
 	// optional screenID
 	screenIDStr := ctx.PostForm("screen_id")
@@ -136,7 +128,6 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		name,
 		typeVal,
 		uploadPath,
-		defaultDuration,
 		user.ID,
 	)
 
@@ -202,7 +193,6 @@ func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (a
 		contentID,
 		req.Name,
 		req.URL,
-		req.DefaultDuration,
 	); err != nil {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}

@@ -135,7 +135,7 @@ func UpdatePlaylistItem(
 		duration = COALESCE($3, duration)
 		WHERE id = $1;`,
 		itemID, position, duration,
-		)
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update playlistItem")
 	}
@@ -273,7 +273,7 @@ func GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
 	err = DB.Select(&items, `
 		SELECT 
 			c.url,
-			COALESCE(pi.duration, c.default_duration) as duration
+			pi.duration
 		FROM screen_playlists sp
 		JOIN playlist_items pi ON sp.playlist_id = pi.playlist_id
 		JOIN content c ON pi.content_id = c.id

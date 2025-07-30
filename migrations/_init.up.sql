@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS content (
     name        TEXT NOT NULL,
     type        TEXT NOT NULL,
     url         TEXT NOT NULL,
-    default_duration INT NOT NULL,
     created_by  INT NOT NULL REFERENCES users(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -65,8 +64,8 @@ CREATE TABLE IF NOT EXISTS playlist_items (
     id          SERIAL PRIMARY KEY,
     playlist_id INT REFERENCES playlists(id) ON DELETE CASCADE,
     content_id  INT REFERENCES content(id),
-    position    INT NOT NULL,            -- ordering
-    duration    INT NOT NULL DEFAULT 5,                     -- override (seconds); NULL = use content.default_duration
+    position    INT NOT NULL,
+    duration    INT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uniq_order_per_playlist UNIQUE(playlist_id, position)
 );

@@ -31,11 +31,11 @@ type Store interface {
 	// content functions
 	AssignContentToScreen(screenID, contentID int) error
 	GetContentForScreen(screenID int) (*model.Content, error)
-	CreateContent(name, typ, url string, defaultDuration, createdBy int) (model.Content, error)
+	CreateContent(name, typ, url string, createdBy int) (model.Content, error)
 
 	GetContentByID(id int) (model.Content, error)
 	ListContent() ([]model.Content, error)
-	UpdateContent(id int, name, url *string, defaultDuration *int) error
+	UpdateContent(id int, name, url *string) error
 	DeleteContent(id int) error
 
 	// playlists
@@ -118,9 +118,9 @@ func (s *pgStore) GetContentForScreen(screenID int) (*model.Content, error) {
 }
 func (s *pgStore) CreateContent(
 	name, typ, url string,
-	defaultDuration, createdBy int,
+	createdBy int,
 ) (model.Content, error) {
-	return CreateContent(name, typ, url, defaultDuration, createdBy)
+	return CreateContent(name, typ, url, createdBy)
 }
 func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 	return GetContentByID(id)
@@ -128,8 +128,8 @@ func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 func (s *pgStore) ListContent() ([]model.Content, error) {
 	return ListContent()
 }
-func (s *pgStore) UpdateContent(id int, name, url *string, defaultDuration *int) error {
-	return UpdateContent(id, name, url, defaultDuration)
+func (s *pgStore) UpdateContent(id int, name, url *string) error {
+	return UpdateContent(id, name, url)
 }
 func (s *pgStore) DeleteContent(id int) error {
 	return DeleteContent(id)

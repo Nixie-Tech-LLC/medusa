@@ -10,7 +10,6 @@ type ContentResponse struct {
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	URL       string `json:"url"`
-	Duration  int    `json:"duration"`
 	CreatedAt string `json:"created_at"`
 }
 

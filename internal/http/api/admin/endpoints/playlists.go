@@ -177,19 +177,8 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	// decide duration - use content's default duration if not specified
-	var defaultDur int
-	if req.Duration != nil {
-		defaultDur = *req.Duration
-	} else {
-		// Get the content to use its default duration
-		content, err := p.store.GetContentByID(req.ContentID)
-		if err != nil {
-			log.Printf("[playlist] add item: failed to get content: %v", err)
-			return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid content_id"}
-		}
-		defaultDur = content.DefaultDuration
-	}
+	// Duration is now required in the request
+	duration := req.Duration
 
 	// 1) fetch existing items so we can compute the next position
 	existingItems, err := p.store.ListPlaylistItems(pid)
@@ -205,7 +194,7 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 	}
 
 	// 3) insert at end
-	item, err := p.store.AddItemToPlaylist(pid, req.ContentID, nextPos, defaultDur)
+	item, err := p.store.AddItemToPlaylist(pid, req.ContentID, nextPos, duration)
 	if err != nil {
 		log.Printf("[playlist] add item: %v", err)
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
@@ -332,7 +321,7 @@ func mapItem(it model.PlaylistItem) packets.PlaylistItemResponse {
 		ID:        it.ID,
 		ContentID: it.ContentID,
 		Position:  it.Position,
-		Duration:  *it.Duration,
+		Duration:  it.Duration,
 		CreatedAt: it.CreatedAt,
 	}
 }
