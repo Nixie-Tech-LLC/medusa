@@ -169,7 +169,6 @@ func TestTVPingRoute(t *testing.T) {
 
 	router := gin.Default()
 
-	// You can pass nil store if ping doesn't use DB
 	store := db.NewStore(nil)
 	tvapi.RegisterPairingRoutes(router.Group("/api/tv"), store)
 
