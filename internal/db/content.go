@@ -10,51 +10,25 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 )
 
-func AssignContentToScreen(screenID, contentID int) error {
-	// upsert into screen_contents
-	_, err := DB.Exec(`
-		INSERT INTO screen_contents (screen_id, content_id, assigned_at)
-		VALUES ($1, $2, now())
-		ON CONFLICT (screen_id)
-		DO UPDATE SET content_id = EXCLUDED.content_id,
-		assigned_at = EXCLUDED.assigned_at;
-		`, screenID, contentID)
-	log.Error().Msg("failed to assign content to screen")
-	return err
-}
-
-func GetContentForScreen(screenID int) (*model.Content, error) {
-	var c model.Content
-	err := DB.Get(&c, `
-		SELECT c.id, c.name, c.type, c.url, c.created_at, c.created_by, c.updated_at
-		FROM content c
-		JOIN screen_contents sc ON sc.content_id = c.id
-		WHERE sc.screen_id = $1
-		`, screenID)
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Error().Err(err).Msg("Failed to get content for screen")
-		return nil, sql.ErrNoRows
-	}
-	return &c, err
-}
-
 func CreateContent(
-	name, typ, url string,
+	name, typ, url string, resolutionWidth, resolutionHeight,
 	createdBy int,
 ) (model.Content, error) {
 	var c model.Content
 	query := `
 	INSERT INTO content
-	(name, type, url, created_by, created_at, updated_at)
+	(name, type, url, resolution_width, resolution_height, created_by, created_at, updated_at)
 	VALUES
-	($1,   $2,   $3,  $4,         now(),     now())
+	($1,   $2,   $3,  $4, $5, $6,         now(),     now())
 	RETURNING
-	id, name, type, url, created_by, created_at, updated_at;`
+	id, name, type, url, resolution_width, resolution_height, created_by, created_at, updated_at;`
 
 	if err := DB.Get(&c, query,
 		name,
 		typ,
 		url,
+		resolutionWidth,
+		resolutionHeight,
 		createdBy,
 	); err != nil {
 		log.Error().Err(err).Msg("Failed to create content for screen")
@@ -67,7 +41,7 @@ func GetContentByID(id int) (model.Content, error) {
 	var c model.Content
 	query := `
 	SELECT
-	id, name, type, url, created_by, created_at, updated_at
+	id, name, type, url, resolution_width, resolution_height, created_by, created_at, updated_at
 	FROM content
 	WHERE id = $1;`
 
@@ -88,6 +62,8 @@ func ListContent() ([]model.Content, error) {
 	name,
 	type,
 	url,
+	resolution_width,
+	resolution_height,
 	created_by,
 	created_at,
 	updated_at
@@ -104,15 +80,19 @@ func ListContent() ([]model.Content, error) {
 func UpdateContent(
 	id int,
 	name, url *string,
+	resolution_width int,
+	resolution_height int,
 ) error {
 	_, err := DB.Exec(`
 		UPDATE content
 		SET
 		name       = COALESCE($2, name),
 		url        = COALESCE($3, url),
+		resolution_width = COALESCE($4, resolution_width),
+		resolution_height = COALESCE($5, resolution_height),
 		updated_at = now()
 		WHERE id = $1;`,
-		id, name, url,
+		id, name, url, resolution_width, resolution_height,
 	)
 	log.Error().Err(err).Msg("Failed to update content")
 	return err

@@ -1,7 +1,6 @@
 package endpoints
 
 import (
-	"fmt"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	_ "path/filepath"
@@ -54,6 +53,8 @@ func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any
 			Name:      x.Name,
 			Type:      x.Type,
 			URL:       x.URL,
+			Width:     x.Width,
+			Height:    x.Height,
 			CreatedAt: x.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -83,6 +84,8 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 		Name:      x.Name,
 		Type:      x.Type,
 		URL:       x.URL,
+		Width:     x.Width,
+		Height:    x.Height,
 		CreatedAt: x.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -95,18 +98,21 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 	// bind form fields
 	name := ctx.PostForm("name")
 	typeVal := ctx.PostForm("type")
+	width, err := strconv.Atoi(ctx.PostForm("width"))
+	if err != nil {
+		log.Error().Err(err).Int("width", width).Msg("[CONTENT] Non-integer resolution width")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid form fields"}
+	}
+
+	height, err := strconv.Atoi(ctx.PostForm("height"))
+	if err != nil {
+		log.Error().Err(err).Int("height", height).Msg("[CONTENT] Non-integer resolution height")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid form fields"}
+	}
+
 	if name == "" || typeVal == "" {
 		log.Printf("[content] CreateContent failed: missing required form fields")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "missing required form fields"}
-	}
-	// optional screenID
-	screenIDStr := ctx.PostForm("screen_id")
-	var screenID *int
-	if screenIDStr != "" {
-		sid, err := strconv.Atoi(screenIDStr)
-		if err == nil {
-			screenID = &sid
-		}
 	}
 
 	// retrieve uploaded file
@@ -128,6 +134,8 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		name,
 		typeVal,
 		uploadPath,
+		width,
+		height,
 		user.ID,
 	)
 
@@ -136,29 +144,13 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "could not create content"}
 	}
 
-	if screenID != nil {
-		if err := c.store.AssignContentToScreen(*screenID, content.ID); err != nil {
-			log.Error().Msg("Failed to assign content to screen")
-			return nil, &api.Error{Code: http.StatusForbidden, Message: "could not assign content"}
-		}
-		go func(screenID int) {
-			screen, err := c.store.GetScreenByID(screenID)
-			if err != nil || screen.Location == nil {
-				log.Error().Msg("Failed to get screen by ID")
-				return
-			}
-			_, err = http.Get(fmt.Sprintf("%s/update", *screen.Location))
-			if err != nil {
-				return
-			}
-		}(*screenID)
-	}
-
 	resp := packets.ContentResponse{
 		ID:        content.ID,
 		Name:      content.Name,
 		Type:      content.Type,
 		URL:       content.URL,
+		Width:     content.Width,
+		Height:    content.Height,
 		CreatedAt: content.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -193,6 +185,8 @@ func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (a
 		contentID,
 		req.Name,
 		req.URL,
+		req.Width,
+		req.Height,
 	); err != nil {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}

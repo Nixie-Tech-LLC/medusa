@@ -32,9 +32,11 @@ type PairScreenRequest struct {
 }
 
 type UpdateContentRequest struct {
-	Name *string `json:"name"`
-	Type *string `json:"type"`
-	URL  *string `json:"url"`
+	Name   *string `json:"name"`
+	Type   *string `json:"type"`
+	URL    *string `json:"url"`
+	Width  int     `json:"width"`
+	Height int     `json:"height"`
 }
 
 type CreatePlaylistRequest struct {
