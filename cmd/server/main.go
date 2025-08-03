@@ -132,6 +132,7 @@ func main() {
 	// Only serve static uploads directory when using local storage
 	if !env.useSpaces {
 		r.Static("/uploads", "./uploads")
+		r.Static("/static", "./integrations")
 	}
 
 	// start

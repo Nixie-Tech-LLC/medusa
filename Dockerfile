@@ -3,6 +3,7 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 COPY migrations/ ./migrations/
+COPY integrations/ ./integrations/
 RUN go mod download
 COPY . .
 RUN go build -o server ./cmd/server
