@@ -38,6 +38,7 @@ func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
 	r.DELETE("/playlists/:id/items/:item_id", api.ResolveEndpointWithAuth(ctl.removeItem))
 	r.GET("/playlists/:id/items", api.ResolveEndpointWithAuth(ctl.listItems))
 	r.PUT("/playlists/:id/items", api.ResolveEndpointWithAuth(ctl.reorderItems))
+  	r.POST("/playlists/:id/integrations", api.ResolveEndpointWithAuth(ctl.addIntegration))
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
@@ -296,6 +297,64 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 
 	// return the newly-ordered list
 	return p.listItems(ctx, user)
+}
+
+func (p *PlaylistController) addIntegration(
+  ctx *gin.Context, user *model.User,
+) (any, *api.Error) {
+  // 1) Parse & auth
+  pid, err := strconv.Atoi(ctx.Param("id"))
+  if err != nil {
+    return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid playlist id"}
+  }
+  pl, err := p.store.GetPlaylistByID(pid)
+  if err != nil || pl.CreatedBy != user.ID {
+    return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+  }
+
+  // 2) Bind request
+  var req struct {
+    IntegrationName string `json:"integration_name" binding:"required"`
+    Duration        *int   `json:"duration"`
+  }
+  if err := ctx.ShouldBindJSON(&req); err != nil {
+    return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+  }
+
+  // 3) Build the static URL
+  url := fmt.Sprintf("/static/%s/index.html", req.IntegrationName)
+
+  // 4) Decide duration
+  dur := 10 // your default
+  if req.Duration != nil {
+    dur = *req.Duration
+  }
+
+  // 5) Create a new Content record of type “html”
+  content, err := p.store.CreateContent(
+    "integration_content", "html", url, dur, user.ID,
+  )
+  if err != nil {
+    log.Error().Err(err).Msg("create integration content failed")
+    return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create content"}
+  }
+
+  // 6) Append it to the end of the playlist
+  items, _ := p.store.ListPlaylistItems(pid)
+  pos := 1
+  if len(items) > 0 {
+    pos = items[len(items)-1].Position + 1
+  }
+  item, err := p.store.AddItemToPlaylist(pid, content.ID, pos, dur)
+  if err != nil {
+    log.Error().Err(err).Msg("add integration item failed")
+    return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
+  }
+
+  // 7) Invalidate ETags so screens refresh
+  go p.notifyScreensPlaylistUpdated(pid)
+
+  return mapItem(item), nil
 }
 
 func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
