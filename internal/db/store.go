@@ -9,6 +9,7 @@ import (
 type ContentItem struct {
 	URL      string `db:"url"`
 	Duration int    `db:"duration"`
+	Type 	 string `db:"type"`
 }
 
 // Store defines all operations against the database.

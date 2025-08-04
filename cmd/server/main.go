@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"os"
+    "path/filepath"
+    "net/http"
+    "strings"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
@@ -130,10 +133,34 @@ func main() {
 	tvapi.RegisterPairingRoutes(tv, store)
 
 	// Only serve static uploads directory when using local storage
-	if !env.useSpaces {
-		r.Static("/uploads", "./uploads")
-		r.Static("/static", "./integrations")
-	}
+    if !env.useSpaces {
+        // keep your uploads static handler
+        r.Static("/uploads", "./uploads")
+
+        // unified integrations handler:
+        r.GET("/integrations/*filepath", func(c *gin.Context) {
+            // filepath contains a leading “/”, e.g. “/athan” or “/athan/foo.js”
+            rel := strings.TrimPrefix(c.Param("filepath"), "/")
+            full := filepath.Join("integrations", rel)
+
+            info, err := os.Stat(full)
+            if err != nil {
+                c.Status(http.StatusNotFound)
+                return
+            }
+
+            // if it’s a folder, serve its index.html
+            if info.IsDir() {
+                full = filepath.Join(full, "index.html")
+                if _, err := os.Stat(full); err != nil {
+                    c.Status(http.StatusNotFound)
+                    return
+                }
+            }
+
+            c.File(full)
+        })
+    }
 
 	// start
 	log.Printf("listening on %s", env.serverAddress)

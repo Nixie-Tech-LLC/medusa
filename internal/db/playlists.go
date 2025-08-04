@@ -254,39 +254,38 @@ func GetPlaylistForScreen(screenID int) (model.Playlist, error) {
 
 // GetPlaylistContentForScreen returns playlist name and content URLs/durations for a screen
 func GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
-	// Get playlist name
-	var playlistName string
-	err := DB.Get(&playlistName, `
-		SELECT p.name
-		FROM screen_playlists sp
-		JOIN playlists p ON sp.playlist_id = p.id
-		WHERE sp.screen_id = $1 AND sp.active = true;`,
-		screenID,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get playlist name for screen")
-		return "", nil, err
-	}
+    // 1) Get the playlist name
+    var playlistName string
+    if err := DB.Get(&playlistName, `
+        SELECT p.name
+          FROM screen_playlists sp
+          JOIN playlists p ON sp.playlist_id = p.id
+         WHERE sp.screen_id = $1
+           AND sp.active = true;
+    `, screenID); err != nil {
+        log.Error().Err(err).Msg("Failed to get playlist name for screen")
+        return "", nil, err
+    }
 
-	// Get content items
-	var items []ContentItem
-	err = DB.Select(&items, `
-		SELECT 
-			c.url,
-			pi.duration
-		FROM screen_playlists sp
-		JOIN playlist_items pi ON sp.playlist_id = pi.playlist_id
-		JOIN content c ON pi.content_id = c.id
-		WHERE sp.screen_id = $1 AND sp.active = true
-		ORDER BY pi.position;`,
-		screenID,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get playlist content for screen")
-		return playlistName, nil, err
-	}
+    // 2) Get the content rows (url, duration, type), defaulting blank → "text/html"
+    var items []ContentItem
+    if err := DB.Select(&items, `
+        SELECT
+          c.url,
+          pi.duration,
+          COALESCE(NULLIF(c.type, ''), 'text/html') AS type
+        FROM screen_playlists sp
+        JOIN playlist_items   pi ON sp.playlist_id = pi.playlist_id
+        JOIN content          c  ON pi.content_id    = c.id
+        WHERE sp.screen_id = $1
+          AND sp.active    = true
+        ORDER BY pi.position;
+    `, screenID); err != nil {
+        log.Error().Err(err).Msg("Failed to get playlist content for screen")
+        return playlistName, nil, err
+    }
 
-	return playlistName, items, nil
+    return playlistName, items, nil
 }
 
 // GetScreensUsingPlaylist returns all screens that have the specified playlist assigned

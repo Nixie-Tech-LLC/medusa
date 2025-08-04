@@ -53,4 +53,5 @@ type TVPlaylistResponse struct {
 type TVContentItem struct {
 	URL      string `json:"url"`
 	Duration int    `json:"duration"`
+	Type 	 string `json:"type"`
 }
