@@ -7,8 +7,8 @@ type Screen struct {
 	ID                int       `db:"id"           json:"id"`
 	DeviceID          *string   `db:"device_id"    json:"device_id"`
 	ClientInformation *string   `db:"client_information" json:"client_information"`
-	ClientWidth       int       `db:"client_width"  json:"client_width"`
-	ClientHeight      int       `db:"client_height"  json:"client_height"`
+	ClientWidth       *int      `db:"client_width"  json:"client_width"`
+	ClientHeight      *int      `db:"client_height"  json:"client_height"`
 	Name              string    `db:"name"         json:"name"`
 	Location          *string   `db:"location"     json:"location"`
 	Paired            bool      `db:"paired"       json:"paired"`

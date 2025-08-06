@@ -20,8 +20,8 @@ type ScreenResponse struct {
 	ID                int     `json:"id"`
 	DeviceID          *string `json:"device_id"`
 	ClientInformation *string `json:"client_information"`
-	ClientWidth       int     `json:"client_width"`
-	ClientHeight      int     `json:"client_height"`
+	ClientWidth       *int    `json:"client_width"`
+	ClientHeight      *int    `json:"client_height"`
 	Name              string  `json:"name"`
 	Location          *string `json:"location"`
 	Paired            bool    `json:"paired"`
