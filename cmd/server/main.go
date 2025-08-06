@@ -6,11 +6,13 @@ import (
     "path/filepath"
     "net/http"
     "strings"
+    "html/template"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/endpoints"
 	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/auth/endpoints"
 	tvapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
+
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/middleware"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/Nixie-Tech-LLC/medusa/internal/storage"
@@ -75,6 +77,11 @@ func main() {
 	// set up gin router
 	r := gin.Default()
 
+    tmpl := template.Must(template.ParseFiles(
+        "integrations/templates/athan.html",
+    ))
+    r.SetHTMLTemplate(tmpl)
+
 	r.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
 			// Allow all origins
@@ -114,12 +121,14 @@ func main() {
 		storageSystem = storage.NewLocalStorage("./uploads")
 		log.Printf("Using local file storage in ./uploads")
 	}
+
 	// register auth (public) routes first:
 	admin := r.Group("/api/admin")
 	authapi.RegisterAuthRoutes(admin, env.secretKey, store)
 	// register middleware AFTER registering signin/signup routes
 	admin.Use(middleware.JWTMiddleware(env.secretKey))
 	authapi.RegisterSessionRoutes(admin, env.secretKey, store)
+
 
 	protected := admin.Group("/")
 	protected.Use(middleware.JWTMiddleware(env.secretKey))
@@ -131,6 +140,8 @@ func main() {
 
 	tv := r.Group("/api/tv")
 	tvapi.RegisterPairingRoutes(tv, store)
+	tvapi.RegisterIntegrationRoutes(tv)
+
 
 	// Only serve static uploads directory when using local storage
     if !env.useSpaces {

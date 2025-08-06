@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"encoding/json"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -12,8 +13,10 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/utils"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
+
 )
 
 type PlaylistController struct {
@@ -300,78 +303,102 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 }
 
 func (p *PlaylistController) addIntegration(
-	ctx *gin.Context, user *model.User,
+    ctx *gin.Context, user *model.User,
 ) (any, *api.Error) {
-	pid, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid playlist id"}
-	}
-	pl, err := p.store.GetPlaylistByID(pid)
-	if err != nil || pl.CreatedBy != user.ID {
-		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
-	}
+    // parse playlist ID & check ownership
+    pid, err := strconv.Atoi(ctx.Param("id"))
+    if err != nil {
+        return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid playlist id"}
+    }
+    pl, err := p.store.GetPlaylistByID(pid)
+    if err != nil || pl.CreatedBy != user.ID {
+        return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+    }
 
-	var req struct {
-		IntegrationName string `json:"integration_name" binding:"required"`
-		Duration        *int   `json:"duration"`
-	}
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
-	}
+    // bind common fields + raw JSON for integration-specific config
+    var req struct {
+        IntegrationName string          `json:"integration_name" binding:"required"`
+        Duration        *int            `json:"duration"`
+        Position        *int            `json:"position"`
+        Config          json.RawMessage `json:"config"`
+    }
 
-	// Integration content URL
-	url := fmt.Sprintf("/integrations/%s", req.IntegrationName)
+    if err := ctx.ShouldBindJSON(&req); err != nil {
+        return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+    }
 
-	// Default duration
-	dur := 10
-	if req.Duration != nil {
-		dur = *req.Duration
-	}
-
-	// Check if integration already exists in playlist
-	items, err := p.store.ListPlaylistItems(pid)
-	if err != nil {
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlist items"}
-	}
-	for _, item := range items {
-		content, err := p.store.GetContentByID(item.ContentID)
+    // figure out the URL we’ll save based on integration and its config
+    var url string
+    switch req.IntegrationName {
+    case "athan":
+		url, err = utils.setupAthan()
 		if err != nil {
-			continue // skip malformed items
+			return nil, err
 		}
-		if content.URL == url {
-			log.Debug().Str("integration", req.IntegrationName).Msg("Integration already exists in playlist")
-			return mapItem(item), nil
-		}
-	}
+    // add more cases here for other integrations
 
-	// Create the content if not already existing in DB TODO: dedup at content level
-	content, err := p.store.CreateContent(
-		req.IntegrationName, // Content.Name
-		"text/html",         // Content.Type
-		url,                 // Content.URL
-		1920,
-		1080,
-		user.ID,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("create integration content failed")
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create content"}
-	}
+    default:
+        return nil, &api.Error{Code: http.StatusBadRequest, Message: "unknown integration"}
+    }
 
-	// Determine new position
-	pos := 1
-	if len(items) > 0 {
-		pos = items[len(items)-1].Position + 1
-	}
+    // dedupe: if this URL is already in the playlist, return the existing item
+    items, err := p.store.ListPlaylistItems(pid)
+    if err != nil {
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlist items"}
+    }
 
-	item, err := p.store.AddItemToPlaylist(pid, content.ID, pos, dur)
-	if err != nil {
-		log.Error().Err(err).Msg("add integration item failed")
-		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
-	}
+    for _, it := range items {
+        content, err := p.store.GetContentByID(it.ContentID)
+        if err != nil {
+            continue
+        }
+        if content.URL == url {
+            return mapItem(it), nil
+        }
+    }
 
-	go p.notifyScreensPlaylistUpdated(pid)
-	return mapItem(item), nil
+    // create the content record
+    dur := 10
+    if req.Duration != nil {
+        dur = *req.Duration
+    }
+    content, err := p.store.CreateContent(
+        req.IntegrationName, // name
+        "text/html",         // type
+        url,                 // URL
+        1920,                // width
+        1080,                // height
+        user.ID,
+    )
+    if err != nil {
+        log.Error().Err(err).Msg("create integration content failed")
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create content"}
+    }
+
+    // compute insert position and shift existing items if necessary
+    pos := len(items) + 1
+    if req.Position != nil && *req.Position <= pos {
+        pos = *req.Position
+    }
+    for _, it := range items {
+        if it.Position >= pos {
+            newPos := it.Position + 1
+            newDur := it.Duration
+            if err := p.store.UpdatePlaylistItem(it.ID, &newPos, &newDur); err != nil {
+                log.Error().Err(err).Msg("shifting items for integration insert failed")
+            }
+        }
+    }
+
+    // add the new item
+    item, err := p.store.AddItemToPlaylist(pid, content.ID, pos, dur)
+    if err != nil {
+        log.Error().Err(err).Msg("add integration item failed")
+        return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
+    }
+
+    go p.notifyScreensPlaylistUpdated(pid)
+    return mapItem(item), nil
 }
 
 func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
