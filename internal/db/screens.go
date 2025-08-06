@@ -13,7 +13,7 @@ import (
 func GetScreenByID(id int) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
 		FROM screens
 		WHERE id = $1
 		`, id)
@@ -26,7 +26,7 @@ func GetScreenByID(id int) (model.Screen, error) {
 func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_at, updated_at
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
 		FROM screens
 		WHERE device_id = $1
 		`, deviceID)
@@ -53,7 +53,7 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
-		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
 		FROM screens
 		ORDER BY id
 		`)
@@ -68,7 +68,7 @@ func CreateScreen(name string, location *string, createdBy int) (model.Screen, e
 	q := `
 	INSERT INTO screens (name, location, paired, created_by, created_at, updated_at)
 	VALUES ($1, $2, false, $3, now(), now())
-	RETURNING id, device_id, name, location, paired, created_by, created_at, updated_at;`
+	RETURNING id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at;`
 	if err := DB.Get(&s, q, name, location, createdBy); err != nil {
 		log.Error().Msg("failed to create screen")
 		return model.Screen{}, err
@@ -112,6 +112,33 @@ func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 		`, screenID, deviceID)
 	if err != nil {
 		log.Error().Msg("failed to assign device ID to screen")
+	}
+	return err
+}
+
+func UpdateClientInformation(screenID int, clientInformation *string) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET client_information = $2,
+		updated_at = now()
+		WHERE id = $1
+		`, screenID, clientInformation)
+	if err != nil {
+		log.Error().Msg("failed to update client information")
+	}
+	return err
+}
+
+func UpdateClientDimensions(screenID int, width, height int) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET client_width = $2,
+		client_height = $3,
+		updated_at = now()
+		WHERE id = $1
+		`, screenID, width, height)
+	if err != nil {
+		log.Error().Msg("failed to update client dimensions")
 	}
 	return err
 }

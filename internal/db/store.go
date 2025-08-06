@@ -28,6 +28,8 @@ type Store interface {
 	DeleteScreen(id int) error
 	AssignScreenToUser(screenID, userID int) error
 	AssignDeviceIDToScreen(screenID int, deviceID *string) error
+	UpdateClientInformation(screenID int, clientInformation *string) error
+	UpdateClientDimensions(screenID int, width, height int) error
 
 	// content functions
 	CreateContent(name, typ, url string, resWidth int, resHeight int, createdBy int) (model.Content, error)
@@ -107,6 +109,12 @@ func (s *pgStore) AssignScreenToUser(screenID, userID int) error {
 }
 func (s *pgStore) AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 	return AssignDeviceIDToScreen(screenID, deviceID)
+}
+func (s *pgStore) UpdateClientInformation(screenID int, clientInformation *string) error {
+	return UpdateClientInformation(screenID, clientInformation)
+}
+func (s *pgStore) UpdateClientDimensions(screenID int, width, height int) error {
+	return UpdateClientDimensions(screenID, width, height)
 }
 
 // @ Content

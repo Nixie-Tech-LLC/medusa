@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS screens (
     id SERIAL PRIMARY KEY,
     device_id TEXT UNIQUE,
+    client_information TEXT,
+    client_width INT,
+    client_height INT,
     name TEXT NOT NULL,
     location TEXT,
     paired BOOLEAN NOT NULL DEFAULT false,
