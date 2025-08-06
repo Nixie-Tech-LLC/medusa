@@ -1,4 +1,6 @@
 package packets
+
+// RESPONSES FOR /api/tv/screens/
 // RESPONSES FOR /api/tv/screens/*
 
 // screenResponse mirrors model.Screen but flattens times to RFC3339
@@ -13,11 +15,10 @@ type ScreenResponse struct {
 }
 
 type ContentResponse struct {
-	ID        		int    	`json:"id"`
-	Name      		string 	`json:"name"`
-	Type      		string 	`json:"type"`
-	URL       		string 	`json:"url"`
-	DefaultDuration int 	`json:"default_duration"`
-	UpdatedAt 		string 	`json:"updated_at"`
-	CreatedAt 		string 	`json:"created_at"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	URL       string `json:"url"`
+	UpdatedAt string `json:"updated_at"`
+	CreatedAt string `json:"created_at"`
 }

@@ -9,6 +9,7 @@ import (
 type ContentItem struct {
 	URL      string `db:"url"`
 	Duration int    `db:"duration"`
+	Type     string `db:"type"`
 }
 
 // Store defines all operations against the database.
@@ -27,15 +28,17 @@ type Store interface {
 	DeleteScreen(id int) error
 	AssignScreenToUser(screenID, userID int) error
 	AssignDeviceIDToScreen(screenID int, deviceID *string) error
+	UpdateClientInformation(screenID int, clientInformation *string) error
+	UpdateClientDimensions(screenID int, width, height int) error
 
 	// content functions
-	AssignContentToScreen(screenID, contentID int) error
-	GetContentForScreen(screenID int) (*model.Content, error)
-	CreateContent(name, typ, url string, defaultDuration, createdBy int) (model.Content, error)
+	CreateContent(name, typ, url string, resWidth int, resHeight int, createdBy int) (model.Content, error)
 
 	GetContentByID(id int) (model.Content, error)
 	ListContent() ([]model.Content, error)
-	UpdateContent(id int, name, url *string, defaultDuration *int) error
+	SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error)
+	SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error)
+	UpdateContent(id int, name, url *string, width int, height int) error
 	DeleteContent(id int) error
 
 	// playlists
@@ -108,19 +111,19 @@ func (s *pgStore) AssignScreenToUser(screenID, userID int) error {
 func (s *pgStore) AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 	return AssignDeviceIDToScreen(screenID, deviceID)
 }
+func (s *pgStore) UpdateClientInformation(screenID int, clientInformation *string) error {
+	return UpdateClientInformation(screenID, clientInformation)
+}
+func (s *pgStore) UpdateClientDimensions(screenID int, width, height int) error {
+	return UpdateClientDimensions(screenID, width, height)
+}
 
 // @ Content
-func (s *pgStore) AssignContentToScreen(screenID, contentID int) error {
-	return AssignContentToScreen(screenID, contentID)
-}
-func (s *pgStore) GetContentForScreen(screenID int) (*model.Content, error) {
-	return GetContentForScreen(screenID)
-}
 func (s *pgStore) CreateContent(
 	name, typ, url string,
-	defaultDuration, createdBy int,
+	resWidth, resHeight, createdBy int,
 ) (model.Content, error) {
-	return CreateContent(name, typ, url, defaultDuration, createdBy)
+	return CreateContent(name, typ, url, resWidth, resHeight, createdBy)
 }
 func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 	return GetContentByID(id)
@@ -128,8 +131,14 @@ func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 func (s *pgStore) ListContent() ([]model.Content, error) {
 	return ListContent()
 }
-func (s *pgStore) UpdateContent(id int, name, url *string, defaultDuration *int) error {
-	return UpdateContent(id, name, url, defaultDuration)
+func (s *pgStore) SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error) {
+	return SearchContent(name, contentType, createdBy)
+}
+func (s *pgStore) SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error) {
+	return SearchContentMultiple(names, types, createdBy)
+}
+func (s *pgStore) UpdateContent(id int, name, url *string, width int, height int) error {
+	return UpdateContent(id, name, url, width, height)
 }
 func (s *pgStore) DeleteContent(id int) error {
 	return DeleteContent(id)

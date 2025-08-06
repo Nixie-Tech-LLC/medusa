@@ -4,4 +4,5 @@ package packets
 type TVRequest struct {
 	PairingCode string `json:"code" binding:"required"`
 	DeviceID    string `json:"device_id" binding:"required"`
+	Type 		string `json:"type"`
 }

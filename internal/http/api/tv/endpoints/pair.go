@@ -197,6 +197,7 @@ func (t *TvController) getContent(ctx *gin.Context) {
 		contentList[i] = adminpackets.TVContentItem{
 			URL:      item.URL,
 			Duration: item.Duration,
+			Type: 	  item.Type,
 		}
 	}
 

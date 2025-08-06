@@ -10,19 +10,23 @@ type ContentResponse struct {
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	URL       string `json:"url"`
-	Duration  int    `json:"duration"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
 	CreatedAt string `json:"created_at"`
 }
 
 // screenResponse mirrors model.Screen but flattens times to RFC3339
 type ScreenResponse struct {
-	ID        int     `json:"id"`
-	DeviceID  *string `json:"device_id"`
-	Name      string  `json:"name"`
-	Location  *string `json:"location"`
-	Paired    bool    `json:"paired"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	ID                int     `json:"id"`
+	DeviceID          *string `json:"device_id"`
+	ClientInformation *string `json:"client_information"`
+	ClientWidth       *int    `json:"client_width"`
+	ClientHeight      *int    `json:"client_height"`
+	Name              string  `json:"name"`
+	Location          *string `json:"location"`
+	Paired            bool    `json:"paired"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 type PlaylistItemResponse struct {
@@ -52,4 +56,5 @@ type TVPlaylistResponse struct {
 type TVContentItem struct {
 	URL      string `json:"url"`
 	Duration int    `json:"duration"`
+	Type     string `json:"type"`
 }

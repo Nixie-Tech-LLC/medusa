@@ -78,13 +78,16 @@ func (t *TvController) listScreens(ctx *gin.Context, user *model.User) (any, *ap
 			continue
 		}
 		out = append(out, packets.ScreenResponse{
-			ID:        s.ID,
-			DeviceID:  s.DeviceID,
-			Name:      s.Name,
-			Location:  s.Location,
-			Paired:    s.Paired,
-			CreatedAt: s.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
+			ID:                s.ID,
+			DeviceID:          s.DeviceID,
+			ClientInformation: s.ClientInformation,
+			ClientWidth:       s.ClientWidth,
+			ClientHeight:      s.ClientHeight,
+			Name:              s.Name,
+			Location:          s.Location,
+			Paired:            s.Paired,
+			CreatedAt:         s.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:         s.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -104,13 +107,16 @@ func (t *TvController) createScreen(ctx *gin.Context, user *model.User) (any, *a
 	}
 
 	return packets.ScreenResponse{
-		ID:        screen.ID,
-		DeviceID:  screen.DeviceID,
-		Name:      screen.Name,
-		Location:  screen.Location,
-		Paired:    screen.Paired,
-		CreatedAt: screen.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: screen.UpdatedAt.Format(time.RFC3339),
+		ID:                screen.ID,
+		DeviceID:          screen.DeviceID,
+		ClientInformation: screen.ClientInformation,
+		ClientWidth:       screen.ClientWidth,
+		ClientHeight:      screen.ClientHeight,
+		Name:              screen.Name,
+		Location:          screen.Location,
+		Paired:            screen.Paired,
+		CreatedAt:         screen.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         screen.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -135,13 +141,16 @@ func (t *TvController) getScreen(ctx *gin.Context, user *model.User) (any, *api.
 	}
 
 	return packets.ScreenResponse{
-		ID:        screen.ID,
-		DeviceID:  screen.DeviceID,
-		Name:      screen.Name,
-		Location:  screen.Location,
-		Paired:    screen.Paired,
-		CreatedAt: screen.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: screen.UpdatedAt.Format(time.RFC3339),
+		ID:                screen.ID,
+		DeviceID:          screen.DeviceID,
+		ClientInformation: screen.ClientInformation,
+		ClientWidth:       screen.ClientWidth,
+		ClientHeight:      screen.ClientHeight,
+		Name:              screen.Name,
+		Location:          screen.Location,
+		Paired:            screen.Paired,
+		CreatedAt:         screen.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         screen.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -175,13 +184,16 @@ func (t *TvController) updateScreen(ctx *gin.Context, user *model.User) (any, *a
 	updated, _ := t.store.GetScreenByID(id)
 
 	return packets.ScreenResponse{
-		ID:        updated.ID,
-		DeviceID:  updated.DeviceID,
-		Name:      updated.Name,
-		Location:  updated.Location,
-		Paired:    updated.Paired,
-		CreatedAt: updated.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: updated.UpdatedAt.Format(time.RFC3339),
+		ID:                updated.ID,
+		DeviceID:          updated.DeviceID,
+		ClientInformation: updated.ClientInformation,
+		ClientWidth:       updated.ClientWidth,
+		ClientHeight:      updated.ClientHeight,
+		Name:              updated.Name,
+		Location:          updated.Location,
+		Paired:            updated.Paired,
+		CreatedAt:         updated.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         updated.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 

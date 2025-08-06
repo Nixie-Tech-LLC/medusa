@@ -38,6 +38,7 @@ func RegisterPlaylistRoutes(r gin.IRoutes, store db.Store) {
 	r.DELETE("/playlists/:id/items/:item_id", api.ResolveEndpointWithAuth(ctl.removeItem))
 	r.GET("/playlists/:id/items", api.ResolveEndpointWithAuth(ctl.listItems))
 	r.PUT("/playlists/:id/items", api.ResolveEndpointWithAuth(ctl.reorderItems))
+	r.POST("/playlists/:id/integrations", api.ResolveEndpointWithAuth(ctl.addIntegration))
 }
 
 // listPlaylists returns all playlists created by the authenticated user.
@@ -177,19 +178,8 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
-	// decide duration - use content's default duration if not specified
-	var defaultDur int
-	if req.Duration != nil {
-		defaultDur = *req.Duration
-	} else {
-		// Get the content to use its default duration
-		content, err := p.store.GetContentByID(req.ContentID)
-		if err != nil {
-			log.Printf("[playlist] add item: failed to get content: %v", err)
-			return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid content_id"}
-		}
-		defaultDur = content.DefaultDuration
-	}
+	// Duration is now required in the request
+	duration := req.Duration
 
 	// 1) fetch existing items so we can compute the next position
 	existingItems, err := p.store.ListPlaylistItems(pid)
@@ -205,7 +195,7 @@ func (p *PlaylistController) addItem(ctx *gin.Context, user *model.User) (any, *
 	}
 
 	// 3) insert at end
-	item, err := p.store.AddItemToPlaylist(pid, req.ContentID, nextPos, defaultDur)
+	item, err := p.store.AddItemToPlaylist(pid, req.ContentID, nextPos, duration)
 	if err != nil {
 		log.Printf("[playlist] add item: %v", err)
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
@@ -309,6 +299,108 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 	return p.listItems(ctx, user)
 }
 
+func (p *PlaylistController) addIntegration(
+	ctx *gin.Context, user *model.User,
+) (any, *api.Error) {
+	pid, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid playlist id"}
+	}
+	pl, err := p.store.GetPlaylistByID(pid)
+	if err != nil || pl.CreatedBy != user.ID {
+		return nil, &api.Error{Code: http.StatusForbidden, Message: "forbidden"}
+	}
+
+	var req struct {
+		IntegrationName string `json:"integration_name" binding:"required"`
+		Duration        *int   `json:"duration"`
+		Position        *int   `json:"position"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
+	}
+
+	// Integration content URL
+	url := fmt.Sprintf("/integrations/%s", req.IntegrationName)
+
+	// Default duration
+	dur := 10
+	if req.Duration != nil {
+		dur = *req.Duration
+	}
+
+	// Check if integration already exists in playlist
+	items, err := p.store.ListPlaylistItems(pid)
+	if err != nil {
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list playlist items"}
+	}
+	for _, item := range items {
+		content, err := p.store.GetContentByID(item.ContentID)
+		if err != nil {
+			continue // skip malformed items
+		}
+		if content.URL == url {
+			log.Debug().Str("integration", req.IntegrationName).Msg("Integration already exists in playlist")
+			return mapItem(item), nil
+		}
+	}
+
+	// Create the content if not already existing in DB TODO: dedup at content level
+	content, err := p.store.CreateContent(
+		req.IntegrationName, // Content.Name
+		"text/html",         // Content.Type
+		url,                 // Content.URL
+		1920,
+		1080,
+		user.ID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("create integration content failed")
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create content"}
+	}
+
+	// Determine position
+	var pos int
+	if req.Position != nil {
+		pos = *req.Position
+		if pos < 1 {
+			pos = 1
+		} else if pos > len(items)+1 {
+			pos = len(items) + 1
+		}
+
+		// Shift existing items if inserting in the middle
+		if pos <= len(items) {
+			// Need to shift items at position >= pos
+			for _, item := range items {
+				if item.Position >= pos {
+					newPos := pos + 1
+					if err := p.store.UpdatePlaylistItem(item.ID, &newPos, &item.Duration); err != nil {
+						log.Error().Err(err).Msg("Failed to shift playlist item position")
+						return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not reorder items"}
+					}
+				}
+			}
+		}
+	} else {
+		// Default to appending at the end
+		if len(items) > 0 {
+			pos = items[len(items)-1].Position + 1
+		} else {
+			pos = 1
+		}
+	}
+
+	item, err := p.store.AddItemToPlaylist(pid, content.ID, pos, dur)
+	if err != nil {
+		log.Error().Err(err).Msg("add integration item failed")
+		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not add item"}
+	}
+
+	go p.notifyScreensPlaylistUpdated(pid)
+	return mapItem(item), nil
+}
+
 func mapPlaylist(pl model.Playlist) packets.PlaylistResponse {
 	items := make([]packets.PlaylistItemResponse, len(pl.Items))
 	log.Printf("[playlists] mapPlaylists %v", pl.Items)
@@ -332,7 +424,7 @@ func mapItem(it model.PlaylistItem) packets.PlaylistItemResponse {
 		ID:        it.ID,
 		ContentID: it.ContentID,
 		Position:  it.Position,
-		Duration:  *it.Duration,
+		Duration:  it.Duration,
 		CreatedAt: it.CreatedAt,
 	}
 }

@@ -1,7 +1,6 @@
 package endpoints
 
 import (
-	"fmt"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	_ "path/filepath"
@@ -37,24 +36,29 @@ func RegisterContentRoutes(router gin.IRoutes, store db.Store, storage storage.S
 }
 
 func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
-	all, err := c.store.ListContent()
+	// Get query parameters - supports multiple values
+	nameFilters := ctx.QueryArray("name")
+	typeFilters := ctx.QueryArray("type")
+
+	userID := user.ID
+
+	// Use the new SearchContentMultiple method that handles filtering in the database
+	all, err := c.store.SearchContentMultiple(nameFilters, typeFilters, &userID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not list content"})
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}
 
-	// only return content owned by this user
+	// Convert to response format
 	out := make([]packets.ContentResponse, 0, len(all))
 	for _, x := range all {
-		if x.CreatedBy != user.ID {
-			continue
-		}
 		out = append(out, packets.ContentResponse{
 			ID:        x.ID,
 			Name:      x.Name,
 			Type:      x.Type,
 			URL:       x.URL,
-			Duration:  x.DefaultDuration,
+			Width:     x.Width,
+			Height:    x.Height,
 			CreatedAt: x.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -84,7 +88,8 @@ func (c *ContentController) getContent(ctx *gin.Context, user *model.User) (any,
 		Name:      x.Name,
 		Type:      x.Type,
 		URL:       x.URL,
-		Duration:  x.DefaultDuration,
+		Width:     x.Width,
+		Height:    x.Height,
 		CreatedAt: x.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -97,24 +102,21 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 	// bind form fields
 	name := ctx.PostForm("name")
 	typeVal := ctx.PostForm("type")
-	durationStr := ctx.PostForm("default_duration")
-	if name == "" || typeVal == "" || durationStr == "" {
+	width, err := strconv.Atoi(ctx.PostForm("width"))
+	if err != nil {
+		log.Error().Err(err).Int("width", width).Msg("[CONTENT] Non-integer resolution width")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid form fields"}
+	}
+
+	height, err := strconv.Atoi(ctx.PostForm("height"))
+	if err != nil {
+		log.Error().Err(err).Int("height", height).Msg("[CONTENT] Non-integer resolution height")
+		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid form fields"}
+	}
+
+	if name == "" || typeVal == "" {
 		log.Printf("[content] CreateContent failed: missing required form fields")
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: "missing required form fields"}
-	}
-	defaultDuration, err := strconv.Atoi(durationStr)
-	if err != nil {
-		log.Printf("[content] CreateContent failed: %v", err)
-		return nil, &api.Error{Code: http.StatusBadRequest, Message: "invalid default_duration"}
-	}
-	// optional screenID
-	screenIDStr := ctx.PostForm("screen_id")
-	var screenID *int
-	if screenIDStr != "" {
-		sid, err := strconv.Atoi(screenIDStr)
-		if err == nil {
-			screenID = &sid
-		}
 	}
 
 	// retrieve uploaded file
@@ -136,7 +138,8 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		name,
 		typeVal,
 		uploadPath,
-		defaultDuration,
+		width,
+		height,
 		user.ID,
 	)
 
@@ -145,29 +148,13 @@ func (c *ContentController) createContent(ctx *gin.Context, user *model.User) (a
 		return nil, &api.Error{Code: http.StatusForbidden, Message: "could not create content"}
 	}
 
-	if screenID != nil {
-		if err := c.store.AssignContentToScreen(*screenID, content.ID); err != nil {
-			log.Error().Msg("Failed to assign content to screen")
-			return nil, &api.Error{Code: http.StatusForbidden, Message: "could not assign content"}
-		}
-		go func(screenID int) {
-			screen, err := c.store.GetScreenByID(screenID)
-			if err != nil || screen.Location == nil {
-				log.Error().Msg("Failed to get screen by ID")
-				return
-			}
-			_, err = http.Get(fmt.Sprintf("%s/update", *screen.Location))
-			if err != nil {
-				return
-			}
-		}(*screenID)
-	}
-
 	resp := packets.ContentResponse{
 		ID:        content.ID,
 		Name:      content.Name,
 		Type:      content.Type,
 		URL:       content.URL,
+		Width:     content.Width,
+		Height:    content.Height,
 		CreatedAt: content.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -202,7 +189,8 @@ func (c *ContentController) updateContent(ctx *gin.Context, user *model.User) (a
 		contentID,
 		req.Name,
 		req.URL,
-		req.DefaultDuration,
+		req.Width,
+		req.Height,
 	); err != nil {
 		return nil, &api.Error{Code: http.StatusForbidden, Message: err.Error()}
 	}

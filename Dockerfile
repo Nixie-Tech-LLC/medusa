@@ -1,18 +1,24 @@
-# Build stage
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
+
 COPY go.mod go.sum ./
-COPY migrations/ ./migrations/
 RUN go mod download
+
+COPY migrations/ ./migrations/
+COPY integrations/ ./integrations/
+
 COPY . .
 RUN go build -o server ./cmd/server
 
-# Final image
 FROM alpine:latest
-WORKDIR /root/
-RUN apk add curl
+WORKDIR /app
+
+RUN apk add --no-cache curl ca-certificates
+
 COPY --from=builder /app/server .
-COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/integrations ./integrations
+
 EXPOSE 8080
 ENTRYPOINT ["./server"]
 
