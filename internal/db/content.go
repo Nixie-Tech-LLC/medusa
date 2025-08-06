@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/rs/zerolog/log"
 
+
 	_ "github.com/lib/pq"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
@@ -102,4 +103,50 @@ func DeleteContent(id int) error {
 	_, err := DB.Exec(`DELETE FROM content WHERE id = $1;`, id)
 	log.Error().Err(err).Msg("Failed to delete content")
 	return err
+}
+
+func SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error) {
+	var all []model.Content
+	query := `
+	SELECT
+	id,
+	name,
+	type,
+	url,
+	resolution_width,
+	resolution_height,
+	created_by,
+	created_at,
+	updated_at
+	FROM content
+	WHERE 1=1`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if name != nil && *name != "" {
+		argCount++
+		query += ` AND name ILIKE $` + strconv.Itoa(argCount)
+		args = append(args, "%"+*name+"%")
+	}
+
+	if contentType != nil && *contentType != "" {
+		argCount++
+		query += ` AND type = $` + strconv.Itoa(argCount)
+		args = append(args, *contentType)
+	}
+
+	if createdBy != nil {
+		argCount++
+		query += ` AND created_by = $` + strconv.Itoa(argCount)
+		args = append(args, *createdBy)
+	}
+
+	query += ` ORDER BY id;`
+
+	if err := DB.Select(&all, query, args...); err != nil {
+		log.Error().Err(err).Msg("Failed to search content")
+		return nil, err
+	}
+	return all, nil
 }

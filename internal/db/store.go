@@ -9,7 +9,7 @@ import (
 type ContentItem struct {
 	URL      string `db:"url"`
 	Duration int    `db:"duration"`
-	Type 	 string `db:"type"`
+	Type     string `db:"type"`
 }
 
 // Store defines all operations against the database.
@@ -34,6 +34,7 @@ type Store interface {
 
 	GetContentByID(id int) (model.Content, error)
 	ListContent() ([]model.Content, error)
+	SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error)
 	UpdateContent(id int, name, url *string, width int, height int) error
 	DeleteContent(id int) error
 
@@ -120,6 +121,9 @@ func (s *pgStore) GetContentByID(id int) (model.Content, error) {
 }
 func (s *pgStore) ListContent() ([]model.Content, error) {
 	return ListContent()
+}
+func (s *pgStore) SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error) {
+	return SearchContent(name, contentType, createdBy)
 }
 func (s *pgStore) UpdateContent(id int, name, url *string, width int, height int) error {
 	return UpdateContent(id, name, url, width, height)

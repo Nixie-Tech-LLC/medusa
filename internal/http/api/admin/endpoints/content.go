@@ -36,18 +36,31 @@ func RegisterContentRoutes(router gin.IRoutes, store db.Store, storage storage.S
 }
 
 func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
-	all, err := c.store.ListContent()
+	// Get query parameters
+	nameFilter := ctx.Query("name")
+	typeFilter := ctx.Query("type")
+
+	var namePtr *string
+	var typePtr *string
+	userID := user.ID
+
+	if nameFilter != "" {
+		namePtr = &nameFilter
+	}
+	if typeFilter != "" {
+		typePtr = &typeFilter
+	}
+
+	// Use SearchContent with filters
+	all, err := c.store.SearchContent(namePtr, typePtr, &userID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not list content"})
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}
 
-	// only return content owned by this user
+	// Convert to response format
 	out := make([]packets.ContentResponse, 0, len(all))
 	for _, x := range all {
-		if x.CreatedBy != user.ID {
-			continue
-		}
 		out = append(out, packets.ContentResponse{
 			ID:        x.ID,
 			Name:      x.Name,
