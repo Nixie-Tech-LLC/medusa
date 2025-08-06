@@ -37,6 +37,7 @@ type Store interface {
 	GetContentByID(id int) (model.Content, error)
 	ListContent() ([]model.Content, error)
 	SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error)
+	SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error)
 	UpdateContent(id int, name, url *string, width int, height int) error
 	DeleteContent(id int) error
 
@@ -132,6 +133,9 @@ func (s *pgStore) ListContent() ([]model.Content, error) {
 }
 func (s *pgStore) SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error) {
 	return SearchContent(name, contentType, createdBy)
+}
+func (s *pgStore) SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error) {
+	return SearchContentMultiple(names, types, createdBy)
 }
 func (s *pgStore) UpdateContent(id int, name, url *string, width int, height int) error {
 	return UpdateContent(id, name, url, width, height)

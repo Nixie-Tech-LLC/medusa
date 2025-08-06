@@ -314,6 +314,7 @@ func (p *PlaylistController) addIntegration(
 	var req struct {
 		IntegrationName string `json:"integration_name" binding:"required"`
 		Duration        *int   `json:"duration"`
+		Position        *int   `json:"position"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		return nil, &api.Error{Code: http.StatusBadRequest, Message: err.Error()}
@@ -358,10 +359,36 @@ func (p *PlaylistController) addIntegration(
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not create content"}
 	}
 
-	// Determine new position
-	pos := 1
-	if len(items) > 0 {
-		pos = items[len(items)-1].Position + 1
+	// Determine position
+	var pos int
+	if req.Position != nil {
+		pos = *req.Position
+		if pos < 1 {
+			pos = 1
+		} else if pos > len(items)+1 {
+			pos = len(items) + 1
+		}
+
+		// Shift existing items if inserting in the middle
+		if pos <= len(items) {
+			// Need to shift items at position >= pos
+			for _, item := range items {
+				if item.Position >= pos {
+					newPos := pos + 1
+					if err := p.store.UpdatePlaylistItem(item.ID, &newPos, &item.Duration); err != nil {
+						log.Error().Err(err).Msg("Failed to shift playlist item position")
+						return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not reorder items"}
+					}
+				}
+			}
+		}
+	} else {
+		// Default to appending at the end
+		if len(items) > 0 {
+			pos = items[len(items)-1].Position + 1
+		} else {
+			pos = 1
+		}
 	}
 
 	item, err := p.store.AddItemToPlaylist(pid, content.ID, pos, dur)

@@ -36,23 +36,14 @@ func RegisterContentRoutes(router gin.IRoutes, store db.Store, storage storage.S
 }
 
 func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.Error) {
-	// Get query parameters
-	nameFilter := ctx.Query("name")
-	typeFilter := ctx.Query("type")
+	// Get query parameters - supports multiple values
+	nameFilters := ctx.QueryArray("name")
+	typeFilters := ctx.QueryArray("type")
 
-	var namePtr *string
-	var typePtr *string
 	userID := user.ID
 
-	if nameFilter != "" {
-		namePtr = &nameFilter
-	}
-	if typeFilter != "" {
-		typePtr = &typeFilter
-	}
-
-	// Use SearchContent with filters
-	all, err := c.store.SearchContent(namePtr, typePtr, &userID)
+	// Use the new SearchContentMultiple method that handles filtering in the database
+	all, err := c.store.SearchContentMultiple(nameFilters, typeFilters, &userID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "could not list content"})
 		return nil, &api.Error{Code: http.StatusInternalServerError, Message: "could not list content"}
