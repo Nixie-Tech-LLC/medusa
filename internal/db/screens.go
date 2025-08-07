@@ -3,8 +3,9 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"github.com/rs/zerolog/log"
 
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	_ "github.com/lib/pq"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
@@ -14,11 +15,11 @@ func GetScreenByID(id int) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
 		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
-		FROM screens
-		WHERE id = $1
-		`, id)
+		  FROM screens
+		 WHERE id = $1
+	`, id)
 	if err != nil {
-		log.Error().Msg("failed to get screen by id")
+		log.Error().Err(err).Int("id", id).Msg("failed to get screen by id")
 	}
 	return screen, err
 }
@@ -26,12 +27,12 @@ func GetScreenByID(id int) (model.Screen, error) {
 func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_at, updated_at
-		FROM screens
-		WHERE device_id = $1
-		`, deviceID)
+		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
+		  FROM screens
+		 WHERE device_id = $1
+	`, deviceID)
 	if err != nil {
-		log.Error().Msg("failed to get screen by device id")
+		log.Error().Err(err).Msg("failed to get screen by device id")
 	}
 	return screen, err
 }
@@ -40,11 +41,11 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 	var isPaired bool
 	err := DB.Get(&isPaired, `
 		SELECT paired
-		FROM screens
-		WHERE device_id = $1
-		`, deviceID)
+		  FROM screens
+		 WHERE device_id = $1
+	`, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
-		log.Info().Msg("No rows found when checking if device is paired")
+		log.Info().Str("device_id", deref(deviceID)).Msg("No rows found when checking if device is paired")
 		return false, nil
 	}
 	return isPaired, err
@@ -54,23 +55,27 @@ func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
 		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
-		FROM screens
-		ORDER BY id
-		`)
+		  FROM screens
+		 ORDER BY id
+	`)
 	if err != nil {
-		log.Error().Msg("failed to list screens")
+		log.Error().Err(err).Msg("failed to list screens")
 	}
 	return screens, err
 }
 
+// CreateScreen now generates a UUID for device_id to satisfy NOT NULL + UNIQUE.
 func CreateScreen(name string, location *string, createdBy int) (model.Screen, error) {
 	var s model.Screen
-	q := `
-	INSERT INTO screens (name, location, paired, created_by, created_at, updated_at)
-	VALUES ($1, $2, false, $3, now(), now())
+	deviceID := uuid.NewString()
+
+	const q = `
+	INSERT INTO screens (device_id, name, location, paired, created_by, created_at, updated_at)
+	VALUES ($1,        $2,   $3,       false,  $4,        now(),     now())
 	RETURNING id, device_id, name, location, paired, created_by, created_at, updated_at;`
-	if err := DB.Get(&s, q, name, location, createdBy); err != nil {
-		log.Error().Msg("failed to create screen")
+
+	if err := DB.Get(&s, q, deviceID, name, location, createdBy); err != nil {
+		log.Error().Err(err).Str("device_id", deviceID).Msg("failed to create screen")
 		return model.Screen{}, err
 	}
 	return s, nil
@@ -79,13 +84,13 @@ func CreateScreen(name string, location *string, createdBy int) (model.Screen, e
 func UpdateScreen(id int, name, location *string) error {
 	_, err := DB.Exec(`
 		UPDATE screens
-		SET name = COALESCE($2, name),
-		location = COALESCE($3, location),
-		updated_at = now()
-		WHERE id = $1
-		`, id, name, location)
+		   SET name = COALESCE($2, name),
+		       location = COALESCE($3, location),
+		       updated_at = now()
+		 WHERE id = $1
+	`, id, name, location)
 	if err != nil {
-		log.Error().Msg("failed to update screen")
+		log.Error().Err(err).Int("id", id).Msg("failed to update screen")
 	}
 	return err
 }
@@ -93,12 +98,12 @@ func UpdateScreen(id int, name, location *string) error {
 func PairScreen(id int) error {
 	_, err := DB.Exec(`
 		UPDATE screens
-		SET paired = TRUE,
-		updated_at = now()
-		WHERE id = $1
-		`, id)
+		   SET paired = TRUE,
+		       updated_at = now()
+		 WHERE id = $1
+	`, id)
 	if err != nil {
-		log.Error().Msg("failed to pair screen")
+		log.Error().Err(err).Int("id", id).Msg("failed to pair screen")
 	}
 	return err
 }
@@ -106,12 +111,12 @@ func PairScreen(id int) error {
 func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 	_, err := DB.Exec(`
 		UPDATE screens
-		SET device_id = COALESCE($2, device_id),
-		updated_at = now()
-		WHERE id = $1
-		`, screenID, deviceID)
+		   SET device_id = COALESCE($2, device_id),
+		       updated_at = now()
+		 WHERE id = $1
+	`, screenID, deviceID)
 	if err != nil {
-		log.Error().Msg("failed to assign device ID to screen")
+		log.Error().Err(err).Int("screen_id", screenID).Str("device_id", deref(deviceID)).Msg("failed to assign device ID to screen")
 	}
 	return err
 }
@@ -119,7 +124,7 @@ func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 func DeleteScreen(id int) error {
 	_, err := DB.Exec(`DELETE FROM screens WHERE id = $1`, id)
 	if err != nil {
-		log.Error().Msg("failed to delete screen")
+		log.Error().Err(err).Int("id", id).Msg("failed to delete screen")
 	}
 	return err
 }
@@ -129,9 +134,17 @@ func AssignScreenToUser(screenID, userID int) error {
 		INSERT INTO screen_assignments (screen_id, user_id)
 		VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
-		`, screenID, userID)
+	`, screenID, userID)
 	if err != nil {
-		log.Error().Msg("failed to assign screen to user")
+		log.Error().Err(err).Int("screen_id", screenID).Int("user_id", userID).Msg("failed to assign screen to user")
 	}
 	return err
 }
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+

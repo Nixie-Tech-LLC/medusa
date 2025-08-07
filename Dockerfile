@@ -8,6 +8,7 @@ COPY migrations/ ./migrations/
 COPY integrations/ ./integrations/
 
 COPY . .
+RUN go mod tidy
 RUN go build -o server ./cmd/server
 
 FROM alpine:latest
