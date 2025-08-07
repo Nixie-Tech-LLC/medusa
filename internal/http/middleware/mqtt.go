@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/packets"
+	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/control/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 	"github.com/gin-gonic/gin"

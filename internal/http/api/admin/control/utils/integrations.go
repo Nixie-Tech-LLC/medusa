@@ -8,7 +8,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 )
 
-func SetupAthan(config json.RawMessage) (string, *api.Error) {
+func SetupAthan(config json.RawMessage) (string, *api.APIError) {
 	// athan needs latitude, longitude, and optional date
 	var cfg struct {
 		Latitude  float64 `json:"latitude"`
@@ -17,7 +17,7 @@ func SetupAthan(config json.RawMessage) (string, *api.Error) {
 	}
 
 	if err := json.Unmarshal(config, &cfg); err != nil {
-		return "", &api.Error{Code: http.StatusBadRequest, Message: "invalid config for athan"}
+		return "", &api.APIError{Code: http.StatusBadRequest, Message: "invalid config for athan"}
 	}
 
 	if cfg.Date == "" {
