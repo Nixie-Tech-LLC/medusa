@@ -8,7 +8,7 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
 )
 
-func setupAthan(config json.RawMessage) (string, *api.Error) {
+func SetupAthan(config json.RawMessage) (string, *api.Error) {
 	// athan needs latitude, longitude, and optional date
 	var cfg struct {
 		Latitude  float64 `json:"latitude"`
@@ -24,9 +24,11 @@ func setupAthan(config json.RawMessage) (string, *api.Error) {
 		cfg.Date = time.Now().Format("2006-01-02")
 	}
 
-	return fmt.Sprintf(
+	url := fmt.Sprintf(
 		"/api/tv/integrations/athan?lat=%f&lon=%f&date=%s",
 		cfg.Latitude, cfg.Longitude, cfg.Date,
-		), nil
+		)
+
+	return url, nil
 }
 

@@ -16,7 +16,6 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/utils"
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
-
 )
 
 type PlaylistController struct {
@@ -331,12 +330,10 @@ func (p *PlaylistController) addIntegration(
     var url string
     switch req.IntegrationName {
     case "athan":
-		url, err = utils.setupAthan()
-		if err != nil {
-			return nil, err
-		}
-    // add more cases here for other integrations
-
+		conUrl, apiErr := utils.SetupAthan(req.Config)
+		if apiErr != nil { return nil, apiErr }
+		url = conUrl
+    	// add more cases here for other integrations
     default:
         return nil, &api.Error{Code: http.StatusBadRequest, Message: "unknown integration"}
     }
@@ -379,15 +376,6 @@ func (p *PlaylistController) addIntegration(
     pos := len(items) + 1
     if req.Position != nil && *req.Position <= pos {
         pos = *req.Position
-    }
-    for _, it := range items {
-        if it.Position >= pos {
-            newPos := it.Position + 1
-            newDur := it.Duration
-            if err := p.store.UpdatePlaylistItem(it.ID, &newPos, &newDur); err != nil {
-                log.Error().Err(err).Msg("shifting items for integration insert failed")
-            }
-        }
     }
 
     // add the new item
