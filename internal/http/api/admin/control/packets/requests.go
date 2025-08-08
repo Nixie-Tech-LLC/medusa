@@ -1,6 +1,9 @@
 package packets
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // CreateContentRequest Request for creating new content; optional ScreenID to immediately show.
 type CreateContentRequest struct {
@@ -75,4 +78,31 @@ type AddIntegrationRequest struct {
 
 type ReorderItemsRequest struct {
 	ItemIDs []int `json:"item_ids" binding:"required"`
+}
+
+type CreateScheduleRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+type AssignScheduleRequest struct {
+	ScreenID int `json:"screen_id" binding:"required"`
+}
+
+type CreateWindowRequest struct {
+	PlaylistID int        `json:"playlist_id" binding:"required"`
+	Start      time.Time  `json:"start" binding:"required"` // RFC3339
+	End        time.Time  `json:"end" binding:"required"`
+	Recurrence string     `json:"recurrence" binding:"required,oneof=none daily weekly monthly"`
+	RecurUntil *time.Time `json:"recur_until,omitempty"` // required if recurrence != none
+	Priority   int        `json:"priority,omitempty"`
+}
+
+type DeleteWindowRequest struct {
+	Scope      string     `json:"scope" binding:"required,oneof=one all"`
+	OccurStart *time.Time `json:"occur_start,omitempty"` // required when scope=one
+}
+
+type ListOccurrencesQuery struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
 }

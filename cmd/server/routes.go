@@ -67,6 +67,7 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 		adminapi.PlaylistModule(store),
 		// session endpoints that require auth
 		authapi.AuthSessionModule(env.SecretKey, store),
+		adminapi.ScheduleModule(store),
 	)
 
 	api.MountGroup(r, api.GroupConfig{

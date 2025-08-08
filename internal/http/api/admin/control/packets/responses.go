@@ -58,3 +58,10 @@ type TVContentItem struct {
 	Duration int    `json:"duration"`
 	Type     string `json:"type"`
 }
+
+type ScheduleResponse struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}

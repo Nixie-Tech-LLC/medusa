@@ -3,6 +3,7 @@ package db
 import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 // ContentItem represents a content item with URL and duration
@@ -60,6 +61,20 @@ type Store interface {
 	GetPlaylistForScreen(screenID int) (model.Playlist, error)
 	GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error)
 	GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error)
+
+	CreateSchedule(name string, createdBy int) (model.Schedule, error)
+	DeleteSchedule(scheduleID int) error
+	ListSchedules(ownerID int) ([]model.Schedule, error)
+	GetSchedule(scheduleID int) (model.Schedule, error)
+
+	AssignScheduleToScreen(scheduleID, screenID int) error
+	UnassignScheduleFromScreen(scheduleID, screenID int) error
+
+	CreateScheduleWindow(scheduleID, playlistID int, start, end time.Time, recurrence string, recurUntil *time.Time, priority int) (model.ScheduleWindow, error)
+	DeleteScheduleWindowAll(windowID int) error
+	DeleteScheduleWindowOneOccurrence(windowID int, occurStart time.Time) error
+	ListScheduleOccurrences(scheduleID int, from, to time.Time) ([]model.ScheduleOccurrence, error)
+	GetScheduleByWindowID(windowID int) (model.Schedule, error)
 }
 
 // pgStore is the SQL-backed implementation of Store.
@@ -190,4 +205,35 @@ func (s *pgStore) GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error
 }
 func (s *pgStore) GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error) {
 	return GetPlaylistContentForScreen(screenID)
+}
+
+// @ Schedules
+func (s *pgStore) CreateSchedule(name string, createdBy int) (model.Schedule, error) {
+	return CreateSchedule(name, createdBy)
+}
+func (s *pgStore) DeleteSchedule(scheduleID int) error { return DeleteSchedule(scheduleID) }
+func (s *pgStore) ListSchedules(ownerID int) ([]model.Schedule, error) { return ListSchedules(ownerID) }
+func (s *pgStore) GetSchedule(scheduleID int) (model.Schedule, error) { return GetSchedule(scheduleID) }
+
+func (s *pgStore) AssignScheduleToScreen(scheduleID, screenID int) error {
+	return AssignScheduleToScreen(scheduleID, screenID)
+}
+func (s *pgStore) UnassignScheduleFromScreen(scheduleID, screenID int) error {
+	return UnassignScheduleFromScreen(scheduleID, screenID)
+}
+
+func (s *pgStore) CreateScheduleWindow(scheduleID, playlistID int, start, end time.Time, recurrence string, recurUntil *time.Time, priority int) (model.ScheduleWindow, error) {
+	return CreateScheduleWindow(scheduleID, playlistID, start, end, recurrence, recurUntil, priority)
+}
+func (s *pgStore) DeleteScheduleWindowAll(windowID int) error {
+	return DeleteScheduleWindowAll(windowID)
+}
+func (s *pgStore) DeleteScheduleWindowOneOccurrence(windowID int, occurStart time.Time) error {
+	return DeleteScheduleWindowOneOccurrence(windowID, occurStart)
+}
+func (s *pgStore) ListScheduleOccurrences(scheduleID int, from, to time.Time) ([]model.ScheduleOccurrence, error) {
+	return ListScheduleOccurrences(scheduleID, from, to)
+}
+func (s *pgStore) GetScheduleByWindowID(windowID int) (model.Schedule, error) {
+	return GetScheduleByWindowID(windowID)
 }
