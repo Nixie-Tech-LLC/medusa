@@ -330,9 +330,8 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 		return nil, &api.APIError{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
-	var req struct {
-		ItemIDs []int `json:"item_ids" binding:"required"`
-	}
+	var req packets.ReorderItemsRequest
+
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: err.Error()}
 	}
@@ -357,26 +356,22 @@ func (p *PlaylistController) addIntegration(ctx *gin.Context, user *model.User) 
 		return nil, &api.APIError{Code: http.StatusForbidden, Message: "forbidden"}
 	}
 
-	var req struct {
-		IntegrationName string          `json:"integration_name" binding:"required"`
-		Duration        *int            `json:"duration"`
-		Position        *int            `json:"position"`
-		Config          json.RawMessage `json:"config"`
-	}
+	var req packets.AddIntegrationRequest
+
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: err.Error()}
 	}
 
 	var url string
 	switch req.IntegrationName {
-	case "athan":
-		conUrl, apiErr := utils.SetupAthan(req.Config)
-		if apiErr != nil {
-			return nil, apiErr
-		}
-		url = conUrl
-	default:
-		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "unknown integration"}
+		case "athan":
+			conUrl, apiErr := utils.SetupAthan(req.Config)
+			if apiErr != nil {
+				return nil, apiErr
+			}
+			url = conUrl
+		default:
+			return nil, &api.APIError{Code: http.StatusBadRequest, Message: "unknown integration"}
 	}
 
 	items, err := p.store.ListPlaylistItems(pid)

@@ -1,5 +1,7 @@
 package packets
 
+import "encoding/json"
+
 // CreateContentRequest Request for creating new content; optional ScreenID to immediately show.
 type CreateContentRequest struct {
 	Name     string `json:"name"  binding:"required"`
@@ -62,4 +64,15 @@ type UpdatePlaylistItemRequest struct {
 
 type AssignPlaylistToScreenRequest struct {
 	PlaylistID int `json:"playlist_id" binding:"required"`
+}
+
+type AddIntegrationRequest struct {
+	IntegrationName string          `json:"integration_name" binding:"required"`
+	Duration        *int            `json:"duration"`
+	Position        *int            `json:"position"`
+	Config          json.RawMessage `json:"config"`
+}
+
+type ReorderItemsRequest struct {
+	ItemIDs []int `json:"item_ids" binding:"required"`
 }
