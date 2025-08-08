@@ -14,10 +14,10 @@ import (
 func GetScreenByID(id int) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
-		  FROM screens
-		 WHERE id = $1
-	`, id)
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
+		FROM screens
+		WHERE id = $1
+		`, id)
 	if err != nil {
 		log.Error().Err(err).Int("id", id).Msg("failed to get screen by id")
 	}
@@ -27,10 +27,10 @@ func GetScreenByID(id int) (model.Screen, error) {
 func GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 	var screen model.Screen
 	err := DB.Get(&screen, `
-		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
-		  FROM screens
-		 WHERE device_id = $1
-	`, deviceID)
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
+		FROM screens
+		WHERE device_id = $1
+		`, deviceID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get screen by device id")
 	}
@@ -54,10 +54,10 @@ func IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 func ListScreens() ([]model.Screen, error) {
 	var screens []model.Screen
 	err := DB.Select(&screens, `
-		SELECT id, device_id, name, location, paired, created_by, created_at, updated_at
-		  FROM screens
-		 ORDER BY id
-	`)
+		SELECT id, device_id, client_information, client_width, client_height, name, location, paired, created_by, created_at, updated_at
+		FROM screens
+		ORDER BY id
+		`)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to list screens")
 	}
@@ -66,19 +66,20 @@ func ListScreens() ([]model.Screen, error) {
 
 // CreateScreen now generates a UUID for device_id to satisfy NOT NULL + UNIQUE.
 func CreateScreen(name string, location *string, createdBy int) (model.Screen, error) {
-	var s model.Screen
-	deviceID := uuid.NewString()
+    var s model.Screen
+    deviceID := uuid.NewString()
 
-	const q = `
-	INSERT INTO screens (device_id, name, location, paired, created_by, created_at, updated_at)
-	VALUES ($1,        $2,   $3,       false,  $4,        now(),     now())
-	RETURNING id, device_id, name, location, paired, created_by, created_at, updated_at;`
-
-	if err := DB.Get(&s, q, deviceID, name, location, createdBy); err != nil {
-		log.Error().Err(err).Str("device_id", deviceID).Msg("failed to create screen")
-		return model.Screen{}, err
-	}
-	return s, nil
+    q := `
+    INSERT INTO screens (device_id, name, location, paired, created_by, created_at, updated_at)
+    VALUES ($1, $2, $3, false, $4, now(), now())
+    RETURNING id, device_id, client_information, client_width, client_height,
+              name, location, paired, created_by, created_at, updated_at;
+    `
+    if err := DB.Get(&s, q, deviceID, name, location, createdBy); err != nil {
+        log.Error().Err(err).Str("device_id", deviceID).Msg("failed to create screen")
+        return model.Screen{}, err
+    }
+    return s, nil
 }
 
 func UpdateScreen(id int, name, location *string) error {
@@ -117,6 +118,33 @@ func AssignDeviceIDToScreen(screenID int, deviceID *string) error {
 	`, screenID, deviceID)
 	if err != nil {
 		log.Error().Err(err).Int("screen_id", screenID).Str("device_id", deref(deviceID)).Msg("failed to assign device ID to screen")
+	}
+	return err
+}
+
+func UpdateClientInformation(screenID int, clientInformation *string) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET client_information = $2,
+		updated_at = now()
+		WHERE id = $1
+		`, screenID, clientInformation)
+	if err != nil {
+		log.Error().Msg("failed to update client information")
+	}
+	return err
+}
+
+func UpdateClientDimensions(screenID int, width, height int) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET client_width = $2,
+		client_height = $3,
+		updated_at = now()
+		WHERE id = $1
+		`, screenID, width, height)
+	if err != nil {
+		log.Error().Msg("failed to update client dimensions")
 	}
 	return err
 }

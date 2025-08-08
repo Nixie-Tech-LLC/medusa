@@ -37,7 +37,14 @@ func ContentModule(store db.Store, storage storage.Storage) api.Module {
 }
 
 func (c *ContentController) listContent(ctx *gin.Context, user *model.User) (any, *api.APIError) {
-	all, err := c.store.ListContent()
+	// Get query parameters - supports multiple values
+	nameFilters := ctx.QueryArray("name")
+	typeFilters := ctx.QueryArray("type")
+
+	userID := user.ID
+
+	// Use the new SearchContentMultiple method that handles filtering in the database
+	all, err := c.store.SearchContentMultiple(nameFilters, typeFilters, &userID)
 	if err != nil {
 		return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not list content"}
 	}

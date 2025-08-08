@@ -5,8 +5,9 @@ import (
 	"errors"
 	"strings"
 	"fmt"
-
 	"github.com/rs/zerolog/log"
+	"strconv"
+
 	_ "github.com/lib/pq"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
@@ -140,3 +141,121 @@ func DeleteContent(id int) error {
 	return err
 }
 
+func SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error) {
+	var all []model.Content
+	query := `
+	SELECT
+	id,
+	name,
+	type,
+	url,
+	resolution_width,
+	resolution_height,
+	created_by,
+	created_at,
+	updated_at
+	FROM content
+	WHERE 1=1`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if name != nil && *name != "" {
+		argCount++
+		query += ` AND name ILIKE $` + strconv.Itoa(argCount)
+		args = append(args, "%"+*name+"%")
+	}
+
+	if contentType != nil && *contentType != "" {
+		argCount++
+		query += ` AND type = $` + strconv.Itoa(argCount)
+		args = append(args, *contentType)
+	}
+
+	if createdBy != nil {
+		argCount++
+		query += ` AND created_by = $` + strconv.Itoa(argCount)
+		args = append(args, *createdBy)
+	}
+
+	query += ` ORDER BY id;`
+
+	if err := DB.Select(&all, query, args...); err != nil {
+		log.Error().Err(err).Msg("Failed to search content")
+		return nil, err
+	}
+	return all, nil
+}
+
+// SearchContentMultiple supports multiple values for name and type filters
+func SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error) {
+	var all []model.Content
+	query := `
+	SELECT
+	id,
+	name,
+	type,
+	url,
+	resolution_width,
+	resolution_height,
+	created_by,
+	created_at,
+	updated_at
+	FROM content
+	WHERE 1=1`
+
+	args := []interface{}{}
+	argCount := 0
+
+	// Handle multiple name filters with OR
+	if len(names) > 0 {
+		nameConditions := []string{}
+		for _, name := range names {
+			if name != "" {
+				argCount++
+				nameConditions = append(nameConditions, "name ILIKE $"+strconv.Itoa(argCount))
+				args = append(args, "%"+name+"%")
+			}
+		}
+		if len(nameConditions) > 0 {
+			query += " AND (" + strings.Join(nameConditions, " OR ") + ")"
+		}
+	}
+
+	// Handle multiple type filters with OR
+	// If the type ends with '/', treat it as a prefix match (e.g., 'video/' matches 'video/mp4')
+	if len(types) > 0 {
+		typeConditions := []string{}
+		for _, typ := range types {
+			if typ != "" {
+				argCount++
+				if strings.HasSuffix(typ, "/") {
+					// Prefix match for MIME type categories
+					typeConditions = append(typeConditions, "type LIKE $"+strconv.Itoa(argCount))
+					args = append(args, typ+"%")
+				} else {
+					// Exact match
+					typeConditions = append(typeConditions, "type = $"+strconv.Itoa(argCount))
+					args = append(args, typ)
+				}
+			}
+		}
+		if len(typeConditions) > 0 {
+			query += " AND (" + strings.Join(typeConditions, " OR ") + ")"
+		}
+	}
+
+	if createdBy != nil {
+		argCount++
+		query += ` AND created_by = $` + strconv.Itoa(argCount)
+		args = append(args, *createdBy)
+	}
+
+	query += ` ORDER BY id;`
+
+	if err := DB.Select(&all, query, args...); err != nil {
+		log.Error().Err(err).Msg("Failed to search content with multiple filters")
+		return nil, err
+	}
+	return all, nil
+}
