@@ -1,290 +1,317 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Prayer Times</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background: #C0C0C0;
-            font-family: 'Inter', sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .logo {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-weight: 900;
-            font-size: 24px;
-            color: #000;
-        }
-        
-        .logo-text {
-            display: flex;
-            flex-direction: column;
-            line-height: 0.8;
-        }
-        
-        .main-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 80px 40px 40px;
-            height: 100vh;
-            width: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-        
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .title {
-            font-size: 48px;
-            font-weight: 900;
-            color: #000;
-            display: flex;
-            flex-direction: column;
-            line-height: 0.9;
-        }
-        
-        .location-date {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .city {
-            font-size: 24px;
-            font-weight: 700;
-            color: #000;
-        }
-        
-        .date {
-            font-size: 18px;
-            font-weight: 600;
-            color: #000;
-        }
-        
-        .prayer-times-container {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-            max-width: 100%;
-            align-items: flex-end;
-        }
-        
-        .prayer-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        
-        .prayer-card {
-            background: #000;
-            width: 180px;
-            border-radius: 100px 100px 0 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            color: white;
-            position: relative;
-            padding: 20px;
-            padding-bottom: 0;
-            flex-shrink: 0;
-        }
-        
-        .prayer-icon {
-            width: 40px;
-            height: 40px;
-            margin-bottom: 20px;
-            filter: invert(1);
-        }
-        
-        .prayer-name {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 10px;
-            letter-spacing: 2px;
-        }
-        
-        .prayer-time {
-            font-size: 44px;
-            font-weight: 900;
-            line-height: 1;
-            display: inline-block;
-        }
-        
-        .prayer-period {
-            font-size: 16px;
-            font-weight: 400;
-            display: inline-block;
-            margin-left: 5px;
-            vertical-align: super;
-        }
-        
-        .time-container {
-            display: flex;
-            align-items: baseline;
-            justify-content: center;
-        }
-        
-        .iqama-card {
-            background: #000;
-            width: 100%;
-            height: 80px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            padding: 10px;
-            margin-top: 5px
-        }
-        
-        .iqama-title {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            margin-bottom: 5px;
-        }
-        
-        .iqama-time {
-            font-size: 28px;
-            font-weight: 900;
-        }
-        
-        /* Responsive styles */
-        @media (max-width: 1200px) {
-            .prayer-card {
-                width: 150px;
-            }
-            
-            .iqama-card {
-                height: 70px;
-            }
-            
-            .prayer-name {
-                font-size: 24px;
-            }
-            
-            .prayer-time {
-                font-size: 36px;
-            }
-            
-            .prayer-period {
-                font-size: 14px;
-            }
-            
-            .iqama-time {
-                font-size: 24px;
-            }
-            
-            .title {
-                font-size: 40px;
-            }
-        }
-        
-        @media (max-width: 900px) {
-            .prayer-card {
-                width: 120px;
-            }
-            
-            .iqama-card {
-                height: 60px;
-            }
-            
-            .prayer-name {
-                font-size: 20px;
-            }
-            
-            .prayer-time {
-                font-size: 28px;
-            }
-            
-            .prayer-period {
-                font-size: 12px;
-            }
-            
-            .iqama-time {
-                font-size: 20px;
-            }
-            
-            .iqama-title {
-                font-size: 14px;
-            }
-            
-            .prayer-icon {
-                width: 30px;
-                height: 30px;
-            }
-            
-            .prayer-times-container {
-                gap: 15px;
-            }
-        }
-        
-        @media (max-height: 700px) {
-            .main-content {
-                padding: 60px 20px 20px;
-            }
-            
-            .header {
-                margin-bottom: 10px;
-            }
-            
-            .location-date {
-                margin-bottom: 15px;
-            }
-            
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Prayer Times</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f7f7;
+      --ink:#0a0a0a;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --ring:#111111;
+      --accent:#0a0a0a;
+      --accent-ink:#ffffff;
+      --radius-xl:28px;
+      --radius-lg:18px;
+      --shadow:0 10px 30px rgba(0,0,0,.05);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background: radial-gradient(1200px 800px at 10% -10%, #ffffff 0%, #f1f1f1 45%, #ececec 100%);
+      color:var(--ink);
+      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      letter-spacing:.01em;
+    }
+
+    .shell{
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 20px;
+    }
+
+    .top{
+      display:flex;align-items:center;justify-content:space-between;gap:16px;
+    }
+    .brand{
+      font-weight:900;font-size:18px;letter-spacing:.08em;text-transform:uppercase;
+      background:#111;color:#fff;padding:10px 14px;border-radius:999px;
+    }
+
+    .meta{
+      display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;
+      padding:14px 16px;background:var(--card);border-radius:var(--radius-lg);box-shadow:var(--shadow);
+      border:1px solid #ececec;
+    }
+    .city{font-weight:900;font-size:26px;line-height:1}
+    .date{font-weight:600;color:var(--muted);font-size:16px}
+
+    /* Two-column layout: left list, right spotlight */
+    .layout{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap: 24px;
+      min-height: 0;
+    }
+    @media (max-width: 980px){
+      .layout{ grid-template-columns: 1fr; }
+    }
+
+    /* Left column: vertical rows */
+    .list{
+      background:var(--card);
+      border:1px solid #ececec;
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      overflow: auto;
+      max-height: calc(100vh - 200px);
+    }
+
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 1px solid #eee;
+      border-radius: 16px;
+      transition: border-color .2s ease, background .2s ease;
+      background: #fff;
+    }
+    .row:hover{ border-color: var(--ring); }
+
+    .row-main{
+      display:flex;align-items:baseline;gap:14px;min-width:0;
+    }
+    .name{
+      font-weight:800;letter-spacing:.08em;font-size:12px;color:var(--muted);text-transform:uppercase;
+      white-space:nowrap;
+    }
+    .time{
+      display:flex;align-items:baseline;gap:8px;line-height:1;
+    }
+    .time-main{
+      font-family:"Space Grotesk", Inter, ui-sans-serif;
+      font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;
+    }
+    .time-ampm{font-weight:700;font-size:12px;color:var(--muted);margin-top:6px}
+
+    .iqama-pill{
+      background:var(--accent);color:var(--accent-ink);border-radius:999px;
+      padding:6px 10px;font-weight:800;letter-spacing:.08em;font-size:11px;display:inline-flex;gap:8px;align-items:center;
+      white-space:nowrap;
+    }
+    .iq-time{
+      font-family:"Space Grotesk", Inter, ui-sans-serif;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;
+    }
+
+    /* Active (next) row highlight */
+    .row.active{
+      background:#0a0a0a;
+      border-color:#0a0a0a;
+      color:#fff;
+    }
+    .row.active .name,
+    .row.active .time-ampm{ color:#d1d5db; }
+    .row.active .iqama-pill{ background:#fff; color:#000; }
+
+    /* Right column: big spotlight */
+    .spotlight{
+      background:var(--card);
+      border:1px solid #ececec;
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 4vw, 36px);
+      display:flex;
+      flex-direction:column;
+      gap: clamp(16px, 3vh, 28px);
+      min-height: 420px;
+    }
+    .spot-title{
+      font-weight:900;letter-spacing:.06em;text-transform:uppercase;font-size:14px;color:var(--muted);
+    }
+    .spot-name{
+      font-weight:900;font-size:clamp(28px, 4vw, 44px);letter-spacing:.01em;line-height:1;
+    }
+    .spot-times{
+      display:flex;flex-wrap:wrap;gap:18px;align-items:center;
+    }
+    .big-time{
+      display:flex;align-items:baseline;gap:12px;
+      padding:14px 18px;border:1px solid #eee;border-radius:16px;background:#fff;
+    }
+    .label{
+      font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;
+    }
+    .bt-main{
+      font-family:"Space Grotesk", Inter, ui-sans-serif;
+      font-weight:700;font-size: clamp(34px, 5vw, 60px);line-height:1;font-variant-numeric:tabular-nums;
+    }
+    .bt-ampm{font-weight:700;font-size:14px;color:var(--muted);margin-top:10px}
+
+    .countdown{
+      margin-top:auto;
+      font-weight:700;color:var(--muted);font-size:14px;
+    }
+  </style>
 </head>
 <body>
-  <div class="logo">…</div>
-  <div class="main-content">
-    <!-- location & date -->
-    <div class="location-date">
+  <div class="shell">
+    <div class="top">
+      <div class="brand">PRAYER</div>
+    </div>
+
+    <section class="meta">
       <div class="city">{{ .City }}</div>
       <div class="date">{{ .Date }}</div>
-    </div>
-    <!-- prayer cards -->
-    <div class="prayer-times-container">
-      {{range $i, $pr := .Prayers}}
-      <div class="prayer-group">
-        <div class="prayer-card">
-          <!-- icon SVG omitted for brevity -->
-          <div class="prayer-name">{{ $pr.Name }}</div>
-          <div class="time-container">
-            <div class="prayer-time">{{ $pr.Time }}</div>
-            <div class="prayer-period">{{ $pr.Period }}</div>
+    </section>
+
+    <section class="layout">
+      <!-- LEFT: vertical prayer rows -->
+      <div class="list" id="prayer-list">
+        {{range $i, $pr := .Prayers}}
+        <div class="row" data-name="{{$pr.Name}}" data-athan="{{$pr.Time}} {{$pr.Period}}">
+          <div class="row-main">
+            <div class="name">{{$pr.Name}}</div>
+            <div class="time">
+              <div class="time-main">{{$pr.Time}}</div>
+              <div class="time-ampm">{{$pr.Period}}</div>
+            </div>
+          </div>
+          <div class="iqama-pill">
+            <span>IQAMA</span>
+            <span class="iq-time">--:--</span>
           </div>
         </div>
-        <div class="iqama-card">
-          <div class="iqama-title">IQAMA</div>
-          <div class="iqama-time">{{ $pr.Iqama }}</div>
-        </div>
+        {{end}}
       </div>
-      {{end}}
-    </div>
+
+      <!-- RIGHT: next prayer spotlight -->
+      <div class="spotlight" id="spotlight">
+        <div class="spot-title">Next Prayer</div>
+        <div class="spot-name" id="spot-name">—</div>
+
+        <div class="spot-times">
+          <div class="big-time" aria-label="Athan">
+            <div class="label">Athan</div>
+            <div class="bt-main" id="spot-athan">--:--</div>
+            <div class="bt-ampm" id="spot-athan-ampm">—</div>
+          </div>
+
+          <div class="big-time" aria-label="Iqama">
+            <div class="label">Iqama</div>
+            <div class="bt-main" id="spot-iqama">--:--</div>
+            <div class="bt-ampm" id="spot-iqama-ampm">—</div>
+          </div>
+        </div>
+
+        <div class="countdown" id="countdown" aria-live="polite"></div>
+      </div>
+    </section>
   </div>
+
+  <script>
+    // --- Utilities ---
+    function parseTime12hToDate(timeStr){
+      // "h:mm AM" -> Date today
+      const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if(!m) return null;
+      let h = parseInt(m[1],10), min = parseInt(m[2],10);
+      const ap = m[3].toUpperCase();
+      if(ap==="PM" && h!==12) h+=12;
+      if(ap==="AM" && h===12) h=0;
+      const d = new Date();
+      d.setHours(h, min, 0, 0);
+      return d;
+    }
+    function formatTime12h(d){
+      let h = d.getHours(), m = d.getMinutes();
+      const ap = h>=12 ? "PM" : "AM";
+      h = h%12 || 12;
+      return { main: `${h}:${String(m).padStart(2,"0")}`, ampm: ap };
+    }
+    const addMinutes = (d, mins) => new Date(d.getTime() + mins*60000);
+
+    // --- Populate iqama (Athan + 5) and compute next prayer ---
+    const rows = Array.from(document.querySelectorAll(".row"));
+    const now = new Date();
+
+    // Fill iqama times
+    rows.forEach(row=>{
+      const athanStr = row.getAttribute("data-athan");
+      const d = parseTime12hToDate(athanStr);
+      const iq = d ? addMinutes(d, 5) : null;
+      const iqEl = row.querySelector(".iq-time");
+      if (iq && iqEl) {
+        const f = formatTime12h(iq);
+        iqEl.textContent = `${f.main} ${f.ampm}`;
+      }
+    });
+
+    // Determine next upcoming prayer (if all passed, wrap to first tomorrow)
+    function getNextPrayer(){
+      const items = rows.map(r=>{
+        const name = r.getAttribute("data-name");
+        const d = parseTime12hToDate(r.getAttribute("data-athan"));
+        return {row:r, name, athan:d};
+      }).filter(x=>x.athan);
+
+      items.sort((a,b)=>a.athan - b.athan);
+
+      const afterNow = items.find(x=> x.athan > now);
+      return afterNow || (
+        items.length
+          ? { ...items[0], athan: addMinutes(items[0].athan, 24*60) } // tomorrow’s first
+          : null
+      );
+    }
+
+    const next = getNextPrayer();
+    if (next){
+      // Left list highlight
+      rows.forEach(r=> r.classList.remove("active"));
+      next.row.classList.add("active");
+
+      // Spotlight content
+      const iq = addMinutes(parseTime12hToDate(next.row.getAttribute("data-athan")), 5);
+      const fA = formatTime12h(parseTime12hToDate(next.row.getAttribute("data-athan")));
+      const fI = formatTime12h(iq);
+
+      document.getElementById("spot-name").textContent = next.name;
+      document.getElementById("spot-athan").textContent = fA.main;
+      document.getElementById("spot-athan-ampm").textContent = fA.ampm;
+      document.getElementById("spot-iqama").textContent = fI.main;
+      document.getElementById("spot-iqama-ampm").textContent = fI.ampm;
+
+      // Optional: tiny countdown to Athan
+      const countdownEl = document.getElementById("countdown");
+      function tick(){
+        const now2 = new Date();
+        let diff = parseTime12hToDate(next.row.getAttribute("data-athan")).getTime() - now2.getTime();
+        if (diff < 0) diff = 0;
+        const mins = Math.floor(diff/60000);
+        const secs = Math.floor((diff%60000)/1000);
+        countdownEl.textContent = diff>0 ? `Athan in ${mins}m ${String(secs).padStart(2,'0')}s` : `Athan time`;
+      }
+      tick();
+      setInterval(tick, 1000);
+    }
+  </script>
 </body>
 </html>
 
