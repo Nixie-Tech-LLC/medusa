@@ -192,24 +192,42 @@ func GetScheduleByWindowID(windowID int) (model.Schedule, error) {
 	return s, nil
 }
 
-// internal/db/store.go
 func ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error) {
-    const q = `
-      SELECT sw.playlist_id
-      FROM schedule_windows sw
-      JOIN schedule_screens ss ON ss.schedule_id = sw.schedule_id
-      WHERE ss.screen_id = $1
-        AND sw.enabled = TRUE
-        AND sw.recurrence = 'none'
-        AND lower(sw.time_window) <= $2
-        AND upper(sw.time_window)  > $2
-      ORDER BY sw.priority DESC, lower(sw.time_window) DESC
-      LIMIT 1;
-    `
-    var pid int
-    if err := DB.Get(&pid, q, screenID, at.UTC()); err != nil {
-        return 0, err
-    }
-    return pid, nil
+	const q = `
+	  WITH w AS (
+	    SELECT w.id AS window_id, w.playlist_id, w.priority
+	      FROM schedule_windows w
+	      JOIN schedule_screens ss ON ss.schedule_id = w.schedule_id
+	     WHERE ss.screen_id = $1
+	       AND w.enabled = TRUE
+	  ),
+	  o AS (
+	    SELECT w.window_id, w.playlist_id, w.priority,
+	           o.occur_start, o.occur_end
+	      FROM w
+	      CROSS JOIN LATERAL schedule_window_occurrences(
+	                     w.window_id,
+	                     $2::timestamptz - interval '1 day',
+	                     $2::timestamptz + interval '1 day'
+	                   ) AS o
+	  ),
+	  active AS (
+	    SELECT *
+	      FROM o
+	     WHERE o.occur_start <= $2
+	       AND $2 <  o.occur_end
+	  )
+	  SELECT playlist_id
+	    FROM active
+	   ORDER BY priority DESC, occur_start DESC
+	   LIMIT 1;
+	`
+	var pid int
+	err := DB.Get(&pid, q, screenID, at.UTC())
+	if err != nil {
+		log.Debug().Err(err).Int("screen_id", screenID).Time("at", at.UTC()).
+			Msg("ResolvePlaylistForScreenAt: no active schedule window")
+		return 0, err
+	}
+	return pid, nil
 }
-

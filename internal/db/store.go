@@ -22,11 +22,12 @@ type Store interface {
 	UpdateUserProfile(id int, email string, name *string) error
 
 	// screen functions
-	GetScreenByID(id int) (model.Screen, error)
-	ListScreens() ([]model.Screen, error)
 	CreateScreen(name string, location *string, createdBy int) (model.Screen, error)
 	UpdateScreen(id int, name, location *string) error
+	GetScreenByID(id int) (model.Screen, error)
 	DeleteScreen(id int) error
+
+	ListScreens() ([]model.Screen, error)
 	AssignScreenToUser(screenID, userID int) error
 	AssignDeviceIDToScreen(screenID int, deviceID *string) error
 	UpdateClientInformation(screenID int, clientInformation *string) error
@@ -35,28 +36,29 @@ type Store interface {
 	IsScreenPairedByDeviceID(deviceID *string) (bool, error)
 	GetScreenByDeviceID(deviceID *string) (model.Screen, error)
 
-
 	// content functions
 	CreateContent(name, typ, url string, resWidth int, resHeight int, createdBy int) (model.Content, error)
-
 	GetContentByID(id int) (model.Content, error)
+	UpdateContent(id int, name, url *string, width int, height int) error
+	DeleteContent(id int) error
+
 	ListContent() ([]model.Content, error)
 	SearchContent(name, contentType *string, createdBy *int) ([]model.Content, error)
 	SearchContentMultiple(names, types []string, createdBy *int) ([]model.Content, error)
-	UpdateContent(id int, name, url *string, width int, height int) error
-	DeleteContent(id int) error
 
 	// playlists
 	CreatePlaylist(name, description string, createdBy int) (model.Playlist, error)
 	GetPlaylistByID(id int) (model.Playlist, error)
-	ListPlaylists() ([]model.Playlist, error)
 	UpdatePlaylist(id int, name, description *string) error
 	DeletePlaylist(id int) error
+
+	ListPlaylists() ([]model.Playlist, error)
 
 	// playlist items
 	AddItemToPlaylist(playlistID, contentID, position, duration int) (model.PlaylistItem, error)
 	UpdatePlaylistItem(itemID int, position, duration *int) error
 	RemovePlaylistItem(itemID int) error
+
 	ListPlaylistItems(playlistID int) ([]model.PlaylistItem, error)
 	ReorderPlaylistItems(playlistID int, itemIDs []int) error
 
@@ -68,11 +70,11 @@ type Store interface {
 
 	CreateSchedule(name string, createdBy int) (model.Schedule, error)
 	DeleteSchedule(scheduleID int) error
-	ListSchedules(ownerID int) ([]model.Schedule, error)
-	GetSchedule(scheduleID int) (model.Schedule, error)
+	GetScheduleByID(scheduleID int) (model.Schedule, error)
 
 	AssignScheduleToScreen(scheduleID, screenID int) error
 	UnassignScheduleFromScreen(scheduleID, screenID int) error
+	ListSchedules(ownerID int) ([]model.Schedule, error)
 
 	CreateScheduleWindow(scheduleID, playlistID int, start, end time.Time, recurrence string, recurUntil *time.Time, priority int) (model.ScheduleWindow, error)
 	DeleteScheduleWindowAll(windowID int) error
@@ -81,6 +83,8 @@ type Store interface {
 	GetScheduleByWindowID(windowID int) (model.Schedule, error)
 
     ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error)
+	GetEffectivePlaylistForScreen(screenID int, now time.Time) (model.Playlist, []ContentItem, string, error)
+	GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error)
 }
 
 // pgStore is the SQL-backed implementation of Store.
@@ -222,7 +226,7 @@ func (s *pgStore) CreateSchedule(name string, createdBy int) (model.Schedule, er
 }
 func (s *pgStore) DeleteSchedule(scheduleID int) error { return DeleteSchedule(scheduleID) }
 func (s *pgStore) ListSchedules(ownerID int) ([]model.Schedule, error) { return ListSchedules(ownerID) }
-func (s *pgStore) GetSchedule(scheduleID int) (model.Schedule, error) { return GetSchedule(scheduleID) }
+func (s *pgStore) GetScheduleByID(scheduleID int) (model.Schedule, error) { return GetSchedule(scheduleID) }
 
 func (s *pgStore) AssignScheduleToScreen(scheduleID, screenID int) error {
 	return AssignScheduleToScreen(scheduleID, screenID)
@@ -253,4 +257,11 @@ func (s *pgStore) ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, e
 func (s *pgStore) GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
 	return GetScreenByDeviceID(deviceID)
 }
+func (s *pgStore) GetEffectivePlaylistForScreen(screenID int, now time.Time) (model.Playlist, []ContentItem, string, error) {
+	return GetEffectivePlaylistForScreen(screenID, now)
+}
+func (s *pgStore) GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error) {
+	return GetPlaylistContentByPlaylistID(playlistID)
+}
+
 
