@@ -32,6 +32,10 @@ type Store interface {
 	UpdateClientInformation(screenID int, clientInformation *string) error
 	UpdateClientDimensions(screenID int, width, height int) error
 
+	IsScreenPairedByDeviceID(deviceID *string) (bool, error)
+	GetScreenByDeviceID(deviceID *string) (model.Screen, error)
+
+
 	// content functions
 	CreateContent(name, typ, url string, resWidth int, resHeight int, createdBy int) (model.Content, error)
 
@@ -75,6 +79,8 @@ type Store interface {
 	DeleteScheduleWindowOneOccurrence(windowID int, occurStart time.Time) error
 	ListScheduleOccurrences(scheduleID int, from, to time.Time) ([]model.ScheduleOccurrence, error)
 	GetScheduleByWindowID(windowID int) (model.Schedule, error)
+
+    ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error)
 }
 
 // pgStore is the SQL-backed implementation of Store.
@@ -131,6 +137,9 @@ func (s *pgStore) UpdateClientInformation(screenID int, clientInformation *strin
 }
 func (s *pgStore) UpdateClientDimensions(screenID int, width, height int) error {
 	return UpdateClientDimensions(screenID, width, height)
+}
+func (s *pgStore) IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
+	return IsScreenPairedByDeviceID(deviceID)
 }
 
 // @ Content
@@ -237,3 +246,11 @@ func (s *pgStore) ListScheduleOccurrences(scheduleID int, from, to time.Time) ([
 func (s *pgStore) GetScheduleByWindowID(windowID int) (model.Schedule, error) {
 	return GetScheduleByWindowID(windowID)
 }
+
+func (s *pgStore) ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error) {
+	return ResolvePlaylistForScreenAt(screenID, at)
+}
+func (s *pgStore) GetScreenByDeviceID(deviceID *string) (model.Screen, error) {
+	return GetScreenByDeviceID(deviceID)
+}
+

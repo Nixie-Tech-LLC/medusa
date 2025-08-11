@@ -192,3 +192,24 @@ func GetScheduleByWindowID(windowID int) (model.Schedule, error) {
 	return s, nil
 }
 
+// internal/db/store.go
+func ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error) {
+    const q = `
+      SELECT sw.playlist_id
+      FROM schedule_windows sw
+      JOIN schedule_screens ss ON ss.schedule_id = sw.schedule_id
+      WHERE ss.screen_id = $1
+        AND sw.enabled = TRUE
+        AND sw.recurrence = 'none'
+        AND lower(sw.time_window) <= $2
+        AND upper(sw.time_window)  > $2
+      ORDER BY sw.priority DESC, lower(sw.time_window) DESC
+      LIMIT 1;
+    `
+    var pid int
+    if err := DB.Get(&pid, q, screenID, at.UTC()); err != nil {
+        return 0, err
+    }
+    return pid, nil
+}
+

@@ -26,183 +26,205 @@ func newTvController(store db.Store) *TvController {
 	return &TvController{store: store}
 }
 
-// PairingModule mounts public TV endpoints: /register, /ping, /content
+// PairingModule mounts public TV endpoints using api helpers.
 func PairingModule(store db.Store) api.Module {
 	ctl := newTvController(store)
 	return api.ModuleFunc(func(c *api.Controller) {
-		c.Group.POST("/register", ctl.registerPairingCode)
+		// Public routes via helpers
+		c.PUBLIC_POST("/register", ctl.registerPairingCode)
+		c.PUBLIC_GET("/ping", ctl.pingServer)
 
-		// support both HEAD/GET for ping
-		c.Group.HEAD("/ping", ctl.pingServer)
-		c.Group.GET("/ping", ctl.pingServer)
+		// HEAD isn’t exposed on Controller; wire it via api.Public wrapper.
+		c.Group.HEAD("/ping", api.Public(ctl.pingServer))
 
-		c.Group.GET("/content", ctl.getContent)
+		c.PUBLIC_GET("/content", ctl.getContent)
 	})
 }
-
 
 type PairingData struct {
 	DeviceID string `json:"device_id"`
 	IsPaired bool   `json:"is_paired"`
 }
 
-// generateContentETag creates an ETag based on playlist name and content items.
+// generateContentETag hashes playlist name + ordered items (url:duration).
 func generateContentETag(playlistName string, contentItems []db.ContentItem) string {
 	hasher := sha256.New()
 	hasher.Write([]byte(playlistName))
-	buf := make([]byte, 0, 64) // pick a sensible capacity
+	buf := make([]byte, 0, 64)
 	for _, item := range contentItems {
-	    buf = buf[:0]
-	    buf = fmt.Appendf(buf, "%s:%d", item.URL, item.Duration)
-	    hasher.Write(buf)
+		buf = buf[:0]
+		buf = fmt.Appendf(buf, "%s:%d", item.URL, item.Duration)
+		hasher.Write(buf)
 	}
-	hash := hex.EncodeToString(hasher.Sum(nil))
-	// Use 24 chars (unquoted). We'll add quotes in the HTTP header.
-	return hash[:24]
+	sum := hex.EncodeToString(hasher.Sum(nil))
+	return sum[:24] // short but stable; quotes added when emitting headers
 }
 
 // POST /api/tv/register
-func (t *TvController) registerPairingCode(ctx *gin.Context) {
-	var request packets.TVRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Error().Err(err).Msg("failed to bind JSON")
-		return
+func (t *TvController) registerPairingCode(ctx *gin.Context) (any, *api.APIError) {
+	var req packets.TVRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Error().Err(err).Str("path", ctx.FullPath()).Msg("[tv] registerPairingCode: invalid JSON")
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid request body"}
+	}
+	if req.DeviceID == "" || req.PairingCode == "" {
+		log.Warn().Str("device_id", req.DeviceID).Str("pairing_code", req.PairingCode).Msg("[tv] registerPairingCode: missing fields")
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "device_id and pairing_code are required"}
 	}
 
-	isPaired, err := db.IsScreenPairedByDeviceID(&request.DeviceID)
+	isPaired, err := t.store.IsScreenPairedByDeviceID(&req.DeviceID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Error().Err(err).Msg("failed to check if screen is paired by device")
-		return
+		log.Error().Err(err).Str("device_id", req.DeviceID).Msg("[tv] registerPairingCode: store.IsScreenPairedByDeviceID failed")
+		return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not verify pairing state"}
 	}
 	if isPaired {
-		log.Error().Msg("screen is already paired")
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Screen is already paired"})
-		return
+		log.Warn().Str("device_id", req.DeviceID).Msg("[tv] registerPairingCode: already paired")
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "screen is already paired"}
 	}
 
-	pairingData := PairingData{DeviceID: request.DeviceID, IsPaired: false}
-	marshalledPairingData, _ := json.Marshal(pairingData)
-	redis.Set(ctx, request.PairingCode, marshalledPairingData, 7*24*time.Hour)
+	payload := PairingData{DeviceID: req.DeviceID, IsPaired: false}
+	raw, _ := json.Marshal(payload)
 
-	ctx.JSON(http.StatusOK, packets.TVRequest{DeviceID: request.DeviceID})
+	redis.Set(ctx, req.PairingCode, raw, 7*24*time.Hour)
+	
+	log.Info().
+	    Str("device_id", req.DeviceID).
+	    Str("pairing_code", req.PairingCode).
+	    Msg("[tv] registerPairingCode: pairing session created")
+	
+	return packets.TVRequest{DeviceID: req.DeviceID}, nil
 }
 
-// HEAD/GET /api/tv/ping?code=XXXX
-func (t *TvController) pingServer(ctx *gin.Context) {
-	pairingCode := ctx.Query("code")
-	var pairingData PairingData
-	redis.GetUnmarshalledJSON(ctx, pairingCode, &pairingData)
-
-	if pairingData.IsPaired {
-		log.Info().Str("pairingCode", pairingCode).Bool("value", pairingData.IsPaired).Msg("paired")
-		ctx.JSON(http.StatusCreated, gin.H{})
-		return
+// GET/HEAD /api/tv/ping?code=XXXX
+func (t *TvController) pingServer(ctx *gin.Context) (any, *api.APIError) {
+	code := ctx.Query("code")
+	if code == "" {
+		log.Warn().Msg("[tv] pingServer: missing pairing code")
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "code is required"}
 	}
-	log.Info().Str("pairingCode", pairingCode).Bool("value", pairingData.IsPaired).Msg("not paired")
-	ctx.JSON(http.StatusOK, gin.H{})
+
+	var pairing PairingData
+
+	redis.GetUnmarshalledJSON(ctx, code, &pairing)
+
+	if pairing.IsPaired {
+		log.Info().Str("path", ctx.FullPath()).Bool("paired", true).Msg("[tv] pingServer: paired")
+		// api helpers always return 200 on success; surface paired state in body.
+		return gin.H{"paired": true}, nil
+	}
+
+	log.Info().Str("path", ctx.FullPath()).Bool("paired", false).Msg("[tv] pingServer: not paired")
+	return gin.H{"paired": false}, nil
 }
 
 // GET /api/tv/content?device_id=UUID
-func (t *TvController) getContent(ctx *gin.Context) {
+func (t *TvController) getContent(ctx *gin.Context) (any, *api.APIError) {
 	deviceID := ctx.Query("device_id")
 	if deviceID == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "device_id is required"})
-		return
+		log.Warn().Msg("[tv] getContent: missing device_id")
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "device_id is required"}
 	}
 
-	screen, dbErr := db.GetScreenByDeviceID(&deviceID)
-	if dbErr != nil {
-		log.Error().Err(dbErr).Str("deviceID", deviceID).
-			Msg("Device ID not found")
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
-		return
+	screen, err := t.store.GetScreenByDeviceID(&deviceID)
+	if err != nil {
+		log.Error().Err(err).Str("device_id", deviceID).Msg("[tv] getContent: screen not found")
+		return nil, &api.APIError{Code: http.StatusNotFound, Message: "device not found"}
 	}
 	screenID := screen.ID
 
-	// Fetch playlist assigned to this screen
-	playlist, err := db.GetPlaylistForScreen(screenID)
+	playlist, err := t.store.GetPlaylistForScreen(screenID)
 	if err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to get playlist for screen")
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "no playlist assigned to screen"})
-		return
+		log.Warn().Err(err).Int("screen_id", screenID).Msg("[tv] getContent: no playlist assigned")
+		return nil, &api.APIError{Code: http.StatusNotFound, Message: "no playlist assigned to screen"}
 	}
 
 	etagKey := fmt.Sprintf("playlist:%d:etag", playlist.ID)
-	storedETag, err := redis.Rdb.Get(ctx, etagKey).Result()
+	storedETag, redisErr := redis.Rdb.Get(ctx, etagKey).Result()
 
-	// Respect both standard If-None-Match and custom X-If-None-Match (proxy-safe)
 	ifNoneMatch := ctx.GetHeader("If-None-Match")
 	if v := ctx.GetHeader("X-If-None-Match"); v != "" {
 		ifNoneMatch = v
 	}
-	clientETag := ifNoneMatch
-	if len(clientETag) >= 2 && clientETag[0] == '"' && clientETag[len(clientETag)-1] == '"' {
-		clientETag = clientETag[1 : len(clientETag)-1]
-	}
+	clientETag := trimETagQuotes(ifNoneMatch)
 
-	if err == nil && storedETag != "" && clientETag == storedETag {
-		quotedStored := fmt.Sprintf(`"%s"`, storedETag)
-		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-			Str("stored_etag", storedETag).Str("client_etag", ifNoneMatch).
-			Msg("304 via stored ETag")
-		ctx.Header("ETag", quotedStored)
+	if redisErr == nil && storedETag != "" && clientETag == storedETag {
+		// Set headers and return 304 through APIError (logs as error, but honors helpers).
+		quoted := quoteETag(storedETag)
+		ctx.Header("ETag", quoted)
 		ctx.Header("X-Content-ETag", storedETag)
-		ctx.Status(http.StatusNotModified)
-		return
+		ctx.Header("Cache-Control", "no-cache")
+		log.Info().
+			Str("device_id", deviceID).
+			Int("screen_id", screenID).
+			Int("playlist_id", playlist.ID).
+			Str("etag_match", storedETag).
+			Msg("[tv] getContent: 304 via stored ETag")
+		return nil, &api.APIError{Code: http.StatusNotModified, Message: "not modified"}
 	}
 
-	playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
+	playlistName, contentItems, err := t.store.GetPlaylistContentForScreen(screenID)
 	if err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to retrieve playlist content")
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "no content found"})
-		return
+		log.Error().Err(err).Int("screen_id", screenID).Msg("[tv] getContent: failed to load content")
+		return nil, &api.APIError{Code: http.StatusNotFound, Message: "no content found"}
 	}
 
-	// Compute and persist the new ETag
 	currentETag := generateContentETag(playlistName, contentItems)
 	if err := redis.Rdb.Set(ctx, etagKey, currentETag, 0).Err(); err != nil {
-		log.Warn().Err(err).Int("playlist_id", playlist.ID).Str("etag", currentETag).
-			Msg("Failed to store playlist ETag in Redis")
+		log.Warn().Err(err).Int("playlist_id", playlist.ID).Str("etag", currentETag).Msg("[tv] getContent: failed to cache ETag")
 	}
 
-	// If client already has the same ETag (but cache missed), still 304
 	if clientETag == currentETag {
-		quoted := fmt.Sprintf(`"%s"`, currentETag)
-		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-			Str("generated_etag", currentETag).Str("client_etag", ifNoneMatch).
-			Msg("304 via generated ETag")
+		quoted := quoteETag(currentETag)
 		ctx.Header("ETag", quoted)
 		ctx.Header("X-Content-ETag", currentETag)
-		ctx.Status(http.StatusNotModified)
-		return
+		ctx.Header("Cache-Control", "no-cache")
+		log.Info().
+			Str("device_id", deviceID).
+			Int("screen_id", screenID).
+			Int("playlist_id", playlist.ID).
+			Str("etag_match", currentETag).
+			Msg("[tv] getContent: 304 via generated ETag")
+		return nil, &api.APIError{Code: http.StatusNotModified, Message: "not modified"}
 	}
 
-	// Build response payload
-	contentList := make([]adminpackets.TVContentItem, len(contentItems))
-	for i, item := range contentItems {
-		contentList[i] = adminpackets.TVContentItem{
-			URL:      item.URL,
-			Duration: item.Duration,
-			Type:     item.Type,
+	// Build response
+	items := make([]adminpackets.TVContentItem, len(contentItems))
+	for i, it := range contentItems {
+		items[i] = adminpackets.TVContentItem{
+			URL:      it.URL,
+			Duration: it.Duration,
+			Type:     it.Type,
 		}
 	}
-	response := adminpackets.TVPlaylistResponse{
+	resp := adminpackets.TVPlaylistResponse{
 		PlaylistName: playlistName,
-		ContentList:  contentList,
+		ContentList:  items,
 	}
 
-	quoted := fmt.Sprintf(`"%s"`, currentETag)
+	quoted := quoteETag(currentETag)
 	ctx.Header("ETag", quoted)
-	ctx.Header("X-Content-ETag", currentETag) // proxy-safe
+	ctx.Header("X-Content-ETag", currentETag)
 	ctx.Header("Cache-Control", "no-cache")
 
-	log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-		Str("etag", quoted).Str("raw_etag", currentETag).
-		Int("content_items", len(contentItems)).
-		Msg("Returning content with playlist ETag")
+	log.Info().
+		Str("device_id", deviceID).
+		Int("screen_id", screenID).
+		Int("playlist_id", playlist.ID).
+		Str("etag", currentETag).
+		Int("items", len(contentItems)).
+		Msg("[tv] getContent: returning playlist content")
 
-	ctx.JSON(http.StatusOK, response)
+	return resp, nil
+}
+
+func trimETagQuotes(v string) string {
+	if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
+		return v[1 : len(v)-1]
+	}
+	return v
+}
+
+func quoteETag(v string) string {
+	return fmt.Sprintf(`"%s"`, v)
 }
 
