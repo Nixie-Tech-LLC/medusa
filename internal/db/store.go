@@ -32,6 +32,19 @@ type Store interface {
 	UpdateClientInformation(screenID int, clientInformation *string) error
 	UpdateClientDimensions(screenID int, width, height int) error
 
+    // groups
+    CreateScreenGroup(userID int, name, description *string) (model.ScreenGroup, error)
+    RenameScreenGroup(userID, groupID int, newName, newDescription *string) (model.ScreenGroup, error)
+    DeleteScreenGroup(userID, groupID int) error
+    GetScreenGroupByID(groupID int) (model.ScreenGroup, error)
+    ListScreenGroups(userID int) ([]model.ScreenGroup, error)
+
+    // membership
+    AddScreenToGroup(userID, groupID, screenID int) error
+    RemoveScreenFromGroup(userID, groupID, screenID int) error
+    ListScreensInGroup(userID, groupID int) ([]model.Screen, error)
+    ListGroupsForScreen(userID, screenID int) ([]model.ScreenGroup, error)
+
 	// content functions
 	CreateContent(name, typ, url string, resWidth int, resHeight int, createdBy int) (model.Content, error)
 
@@ -237,3 +250,42 @@ func (s *pgStore) ListScheduleOccurrences(scheduleID int, from, to time.Time) ([
 func (s *pgStore) GetScheduleByWindowID(windowID int) (model.Schedule, error) {
 	return GetScheduleByWindowID(windowID)
 }
+func (s *pgStore) RenameScreenGroup(userID, groupID int, newName, newDescription *string) (model.ScreenGroup, error) {
+	return RenameScreenGroup(userID, groupID, newName, newDescription)
+}
+
+func (s *pgStore) CreateScreenGroup(userID int, name, description *string) (model.ScreenGroup, error) {
+	return CreateScreenGroup(userID, name, description)
+}
+func (s *pgStore) DeleteScreenGroup(userID, groupID int) error {
+	return DeleteScreenGroup(userID, groupID)
+}
+func (s *pgStore) GetScreenGroupByID(groupID int) (model.ScreenGroup, error) {
+	return GetScreenGroupByID(groupID)
+}
+func (s *pgStore) ListScreenGroups(userID int) ([]model.ScreenGroup, error) {
+	return ListScreenGroups(userID)
+}
+func (s *pgStore) AddScreenToGroup(userID, groupID, screenID int) error {
+	return AddScreenToGroup(userID, groupID, screenID)
+}
+func (s *pgStore) RemoveScreenFromGroup(userID, groupID, screenID int) error {
+	return RemoveScreenFromGroup(userID, groupID, screenID) 
+}
+func (s *pgStore) ListScreensInGroup(userID, groupID int) ([]model.Screen, error) {
+	return ListScreensInGroup(userID, groupID)
+}
+func (s *pgStore) ListGroupsForScreen(userID, screenID int) ([]model.ScreenGroup, error) {
+	return ListGroupsForScreen(userID, screenID)
+}
+
+
+
+
+
+
+
+
+
+
+

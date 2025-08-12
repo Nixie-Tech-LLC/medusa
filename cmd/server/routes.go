@@ -68,6 +68,7 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 		// session endpoints that require auth
 		authapi.AuthSessionModule(env.SecretKey, store),
 		adminapi.ScheduleModule(store),
+		adminapi.ScreenGroupModule(store),
 	)
 
 	api.MountGroup(r, api.GroupConfig{
