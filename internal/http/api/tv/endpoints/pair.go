@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -105,6 +106,7 @@ func (t *TvController) pingServer(ctx *gin.Context) {
 }
 
 // GET /api/tv/content?device_id=UUID
+
 func (t *TvController) getContent(ctx *gin.Context) {
 	deviceID := ctx.Query("device_id")
 	if deviceID == "" {
@@ -114,72 +116,43 @@ func (t *TvController) getContent(ctx *gin.Context) {
 
 	screen, dbErr := db.GetScreenByDeviceID(&deviceID)
 	if dbErr != nil {
-		log.Error().Err(dbErr).Str("deviceID", deviceID).
-			Msg("Device ID not found")
+		log.Error().Err(dbErr).Str("deviceID", deviceID).Msg("Device ID not found")
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
 	screenID := screen.ID
 
-	// Fetch playlist assigned to this screen
-	playlist, err := db.GetPlaylistForScreen(screenID)
+	now := time.Now().UTC()
+	playlist, contentItems, source, err := db.GetEffectivePlaylistForScreen(screenID, now)
 	if err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to get playlist for screen")
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "no playlist assigned to screen"})
-		return
+	    ctx.Header("X-Debug-Why", "no active schedule window and no direct playlist")
+	    ctx.JSON(http.StatusNotFound, gin.H{"error": "no playlist active for this screen right now"})
+	    return
 	}
 
-	etagKey := fmt.Sprintf("playlist:%d:etag", playlist.ID)
-	storedETag, err := redis.Rdb.Get(ctx, etagKey).Result()
+	// ETag: include playlist ID + updatedAt + items
+	currentETag := generatePlaylistETag(playlist.ID, playlist.UpdatedAt, contentItems)
 
-	// Respect both standard If-None-Match and custom X-If-None-Match (proxy-safe)
+	etagKey := fmt.Sprintf("playlist:%d:etag", playlist.ID)
+	storedETag, _ := redis.Rdb.Get(ctx, etagKey).Result()
+	if storedETag != currentETag {
+		_ = redis.Rdb.Set(ctx, etagKey, currentETag, 0).Err()
+	}
+
 	ifNoneMatch := ctx.GetHeader("If-None-Match")
 	if v := ctx.GetHeader("X-If-None-Match"); v != "" {
 		ifNoneMatch = v
 	}
-	clientETag := ifNoneMatch
-	if len(clientETag) >= 2 && clientETag[0] == '"' && clientETag[len(clientETag)-1] == '"' {
-		clientETag = clientETag[1 : len(clientETag)-1]
-	}
+	clientETag := strings.Trim(ifNoneMatch, `"`)
 
-	if err == nil && storedETag != "" && clientETag == storedETag {
-		quotedStored := fmt.Sprintf(`"%s"`, storedETag)
-		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-			Str("stored_etag", storedETag).Str("client_etag", ifNoneMatch).
-			Msg("304 via stored ETag")
-		ctx.Header("ETag", quotedStored)
-		ctx.Header("X-Content-ETag", storedETag)
-		ctx.Status(http.StatusNotModified)
-		return
-	}
-
-	playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
-	if err != nil {
-		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to retrieve playlist content")
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "no content found"})
-		return
-	}
-
-	// Compute and persist the new ETag
-	currentETag := generateContentETag(playlistName, contentItems)
-	if err := redis.Rdb.Set(ctx, etagKey, currentETag, 0).Err(); err != nil {
-		log.Warn().Err(err).Int("playlist_id", playlist.ID).Str("etag", currentETag).
-			Msg("Failed to store playlist ETag in Redis")
-	}
-
-	// If client already has the same ETag (but cache missed), still 304
 	if clientETag == currentETag {
-		quoted := fmt.Sprintf(`"%s"`, currentETag)
-		log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-			Str("generated_etag", currentETag).Str("client_etag", ifNoneMatch).
-			Msg("304 via generated ETag")
-		ctx.Header("ETag", quoted)
+		ctx.Header("ETag", `"`+currentETag+`"`)
 		ctx.Header("X-Content-ETag", currentETag)
+		ctx.Header("X-Content-Source", source) // "schedule" or "direct"
 		ctx.Status(http.StatusNotModified)
 		return
 	}
 
-	// Build response payload
 	contentList := make([]adminpackets.TVContentItem, len(contentItems))
 	for i, item := range contentItems {
 		contentList[i] = adminpackets.TVContentItem{
@@ -189,20 +162,29 @@ func (t *TvController) getContent(ctx *gin.Context) {
 		}
 	}
 	response := adminpackets.TVPlaylistResponse{
-		PlaylistName: playlistName,
+		PlaylistName: playlist.Name,
 		ContentList:  contentList,
 	}
 
-	quoted := fmt.Sprintf(`"%s"`, currentETag)
-	ctx.Header("ETag", quoted)
-	ctx.Header("X-Content-ETag", currentETag) // proxy-safe
+	ctx.Header("ETag", `"`+currentETag+`"`)
+	ctx.Header("X-Content-ETag", currentETag)
+	ctx.Header("X-Content-Source", source) // nice for debugging
 	ctx.Header("Cache-Control", "no-cache")
-
-	log.Info().Str("deviceID", deviceID).Int("screen_id", screenID).Int("playlist_id", playlist.ID).
-		Str("etag", quoted).Str("raw_etag", currentETag).
-		Int("content_items", len(contentItems)).
-		Msg("Returning content with playlist ETag")
-
 	ctx.JSON(http.StatusOK, response)
 }
 
+func generatePlaylistETag(playlistID int, updatedAt time.Time, contentItems []db.ContentItem) string {
+	h := sha256.New()
+	var buf []byte
+
+	buf = fmt.Appendf(nil, "pid:%d;upts:%d;", playlistID, updatedAt.Unix())
+	h.Write(buf)
+
+	for _, it := range contentItems {
+		buf = buf[:0]
+		buf = fmt.Appendf(buf, "%s:%d;", it.URL, it.Duration)
+		h.Write(buf)
+	}
+	sum := hex.EncodeToString(h.Sum(nil))
+	return sum[:24]
+}
