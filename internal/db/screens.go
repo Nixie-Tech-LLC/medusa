@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/model"
 )
@@ -66,20 +66,20 @@ func ListScreens() ([]model.Screen, error) {
 
 // CreateScreen now generates a UUID for device_id to satisfy NOT NULL + UNIQUE.
 func CreateScreen(name string, location *string, createdBy int) (model.Screen, error) {
-    var s model.Screen
-    deviceID := uuid.NewString()
+	var s model.Screen
+	deviceID := uuid.NewString()
 
-    q := `
+	q := `
     INSERT INTO screens (device_id, name, location, paired, created_by, created_at, updated_at)
     VALUES ($1, $2, $3, false, $4, now(), now())
     RETURNING id, device_id, client_information, client_width, client_height,
               name, location, paired, created_by, created_at, updated_at;
     `
-    if err := DB.Get(&s, q, deviceID, name, location, createdBy); err != nil {
-        log.Error().Err(err).Str("device_id", deviceID).Msg("failed to create screen")
-        return model.Screen{}, err
-    }
-    return s, nil
+	if err := DB.Get(&s, q, deviceID, name, location, createdBy); err != nil {
+		log.Error().Err(err).Str("device_id", deviceID).Msg("failed to create screen")
+		return model.Screen{}, err
+	}
+	return s, nil
 }
 
 func UpdateScreen(id int, name, location *string) error {
@@ -92,6 +92,19 @@ func UpdateScreen(id int, name, location *string) error {
 	`, id, name, location)
 	if err != nil {
 		log.Error().Err(err).Int("id", id).Msg("failed to update screen")
+	}
+	return err
+}
+
+func UpdateScreenIP(id int, ip *string) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		   SET ip_address = COALESCE($2, ip_address),
+		       updated_at = now()
+		 WHERE id = $1
+	`, id, ip)
+	if err != nil {
+		log.Error().Err(err).Int("id", id).Msg("failed to update screen location")
 	}
 	return err
 }
@@ -149,6 +162,19 @@ func UpdateClientDimensions(screenID int, width, height int) error {
 	return err
 }
 
+func UpdateClientStorageSize(screenID int, storageSize int64) error {
+	_, err := DB.Exec(`
+		UPDATE screens
+		SET storage_size = $2,
+		updated_at = now()
+		WHERE id = $1
+		`, screenID, storageSize)
+	if err != nil {
+		log.Error().Msg("failed to update client storage size")
+	}
+	return err
+}
+
 func DeleteScreen(id int) error {
 	_, err := DB.Exec(`DELETE FROM screens WHERE id = $1`, id)
 	if err != nil {
@@ -175,4 +201,3 @@ func deref(s *string) string {
 	}
 	return *s
 }
-

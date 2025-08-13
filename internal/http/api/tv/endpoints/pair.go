@@ -5,15 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 
 	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/control/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
+	adminpackets "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/control/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/packets"
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
@@ -31,6 +33,7 @@ func PairingModule(store db.Store) api.Module {
 	ctl := newTvController(store)
 	return api.ModuleFunc(func(c *api.Controller) {
 		c.Group.POST("/register", ctl.registerPairingCode)
+		c.Group.POST("/report", ctl.reportInfo)
 
 		// support both HEAD/GET for ping
 		c.Group.HEAD("/ping", ctl.pingServer)
@@ -40,10 +43,16 @@ func PairingModule(store db.Store) api.Module {
 	})
 }
 
-
 type PairingData struct {
 	DeviceID string `json:"device_id"`
 	IsPaired bool   `json:"is_paired"`
+}
+
+type DeviceInfo struct {
+	DeviceID          string `json:"device_id"`
+	ClientInformation string `json:"client_information"`
+	ClientWidth       int    `json:"width"`
+	ClientHeight      int    `json:"height"`
 }
 
 // generateContentETag creates an ETag based on playlist name and content items.
@@ -52,9 +61,9 @@ func generateContentETag(playlistName string, contentItems []db.ContentItem) str
 	hasher.Write([]byte(playlistName))
 	buf := make([]byte, 0, 64) // pick a sensible capacity
 	for _, item := range contentItems {
-	    buf = buf[:0]
-	    buf = fmt.Appendf(buf, "%s:%d", item.URL, item.Duration)
-	    hasher.Write(buf)
+		buf = buf[:0]
+		buf = fmt.Appendf(buf, "%s:%d", item.URL, item.Duration)
+		hasher.Write(buf)
 	}
 	hash := hex.EncodeToString(hasher.Sum(nil))
 	// Use 24 chars (unquoted). We'll add quotes in the HTTP header.
@@ -70,7 +79,7 @@ func (t *TvController) registerPairingCode(ctx *gin.Context) {
 		return
 	}
 
-	isPaired, err := db.IsScreenPairedByDeviceID(&request.DeviceID)
+	isPaired, err := t.store.IsScreenPairedByDeviceID(&request.DeviceID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		log.Error().Err(err).Msg("failed to check if screen is paired by device")
@@ -104,6 +113,88 @@ func (t *TvController) pingServer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
+func getClientIP(ctx *gin.Context) string {
+	// Check X-Forwarded-For header first (for proxies/load balancers)
+	forwardedFor := ctx.GetHeader("X-Forwarded-For")
+	if forwardedFor != "" {
+		// X-Forwarded-For can contain multiple IPs, take the first one
+		ips := strings.Split(forwardedFor, ",")
+		if len(ips) > 0 {
+			ip := strings.TrimSpace(ips[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+
+	// Check X-Real-IP header
+	realIP := ctx.GetHeader("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+
+	// Fall back to RemoteAddr
+	ip, _, err := net.SplitHostPort(ctx.Request.RemoteAddr)
+	if err != nil {
+		// If splitting fails, return the whole RemoteAddr
+		return ctx.Request.RemoteAddr
+	}
+	return ip
+}
+
+func (t *TvController) reportInfo(ctx *gin.Context) {
+	var request DeviceInfo
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Error().Err(err).Msg("failed to bind JSON")
+		return
+	}
+
+	isPaired, err := t.store.IsScreenPairedByDeviceID(&request.DeviceID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("failed to check if screen is paired by device")
+		return
+	}
+	if !isPaired {
+		log.Error().Msg("Attempt to report info for an unpaired device")
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Screen is not paired"})
+		return
+	}
+
+	screen, err := t.store.GetScreenByDeviceID(&request.DeviceID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		log.Error().Err(err).Str("deviceID", request.DeviceID).Msg("Failed to find screen by device ID")
+		return
+	}
+
+	screenID := screen.ID
+
+	clientIP := getClientIP(ctx)
+
+	err = t.store.UpdateClientInformation(screenID, &request.ClientInformation)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		log.Error().Err(err).Int("screenID", screenID).Msg("Failed to update client information for screen")
+		return
+	}
+	err = t.store.UpdateClientDimensions(screenID, request.ClientWidth, request.ClientHeight)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		log.Error().Err(err).Int("screenID", screenID).Msg("Failed to update client dimensions for screen")
+		return
+	}
+	err = t.store.UpdateScreenIP(screenID, &clientIP)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		log.Error().Err(err).Int("screenID", screenID).Msg("Failed to update screen location")
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{})
+}
+
 // GET /api/tv/content?device_id=UUID
 func (t *TvController) getContent(ctx *gin.Context) {
 	deviceID := ctx.Query("device_id")
@@ -112,7 +203,7 @@ func (t *TvController) getContent(ctx *gin.Context) {
 		return
 	}
 
-	screen, dbErr := db.GetScreenByDeviceID(&deviceID)
+	screen, dbErr := t.store.GetScreenByDeviceID(&deviceID)
 	if dbErr != nil {
 		log.Error().Err(dbErr).Str("deviceID", deviceID).
 			Msg("Device ID not found")
@@ -122,7 +213,7 @@ func (t *TvController) getContent(ctx *gin.Context) {
 	screenID := screen.ID
 
 	// Fetch playlist assigned to this screen
-	playlist, err := db.GetPlaylistForScreen(screenID)
+	playlist, err := t.store.GetPlaylistForScreen(screenID)
 	if err != nil {
 		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to get playlist for screen")
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "no playlist assigned to screen"})
@@ -153,7 +244,7 @@ func (t *TvController) getContent(ctx *gin.Context) {
 		return
 	}
 
-	playlistName, contentItems, err := db.GetPlaylistContentForScreen(screenID)
+	playlistName, contentItems, err := t.store.GetPlaylistContentForScreen(screenID)
 	if err != nil {
 		log.Error().Err(err).Int("screen_id", screenID).Msg("Failed to retrieve playlist content")
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "no content found"})
@@ -205,4 +296,3 @@ func (t *TvController) getContent(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, response)
 }
-

@@ -11,6 +11,8 @@ type Screen struct {
 	ClientHeight      *int      `db:"client_height"  json:"client_height"`
 	Name              string    `db:"name"         json:"name"`
 	Location          *string   `db:"location"     json:"location"`
+	StorageSize       *int64    `db:"storage_size"  json:"storage_size"`
+	IPAddress         *string   `db:"ip_address"           json:"ip_address"`
 	Paired            bool      `db:"paired"       json:"paired"`
 	CreatedAt         time.Time `db:"created_at"   json:"created_at"`
 	CreatedBy         int       `db:"created_by"   json:"created_by"`
