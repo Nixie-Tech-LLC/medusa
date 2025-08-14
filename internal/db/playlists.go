@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/rs/zerolog/log"
 	"time"
+	"fmt"
 
 	_ "github.com/lib/pq"
 
@@ -370,3 +371,164 @@ func GetEffectivePlaylistForScreen(screenID int, now time.Time) (model.Playlist,
 	pl.Name = name
 	return pl, items, "direct", nil
 }
+
+type DesiredItem struct {
+	ID        *int
+	ContentID *int
+	// If IntegrationURL is set, we must have or create Content for it.
+	IntegrationURL *string
+	Duration       int
+}
+
+// BulkUpdatePlaylist applies name/description updates and reconciles items to match desired list.
+// This runs in a single transaction and returns the updated playlist (with Items).
+func BulkUpdatePlaylist(
+	playlistID int,
+	name, description *string,
+	desired []DesiredItem,
+) (model.Playlist, error) {
+	tx, err := DB.Beginx()
+	if err != nil {
+		return model.Playlist{}, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else if tx != nil {
+			err = tx.Commit()
+		}
+	}()
+
+	// Lock the playlist row to stabilize ownership & updated_at
+	if _, err = tx.Exec(`SELECT id FROM playlists WHERE id=$1 FOR UPDATE;`, playlistID); err != nil {
+		return model.Playlist{}, err
+	}
+
+	// Optional metadata update
+	if name != nil || description != nil {
+		if _, err = tx.Exec(`
+			UPDATE playlists
+			   SET name        = COALESCE($2, name),
+			       description = COALESCE($3, description),
+			       updated_at  = now()
+			 WHERE id = $1;`,
+			playlistID, name, description,
+		); err != nil {
+			return model.Playlist{}, err
+		}
+	}
+
+	// Lock all items in this playlist so position changes won't race.
+	var existing []model.PlaylistItem
+	if err = tx.Select(&existing, `
+		SELECT id, playlist_id, content_id, position, duration, created_at
+		  FROM playlist_items
+		 WHERE playlist_id = $1
+		 ORDER BY position
+		 FOR UPDATE;`,
+		playlistID); err != nil {
+		return model.Playlist{}, err
+	}
+
+	// Build quick lookup
+	existingByID := make(map[int]model.PlaylistItem, len(existing))
+	for _, it := range existing {
+		existingByID[it.ID] = it
+	}
+
+	// Track which existing IDs are kept
+	kept := make(map[int]struct{}, len(existing))
+
+	// We rely on DEFERRABLE UNIQUE (playlist_id, position) at COMMIT.
+	// Apply updates/inserts first with desired target position, then delete leftovers.
+	for i, d := range desired {
+		targetPos := i + 1
+		switch {
+		case d.ID != nil:
+			cur, ok := existingByID[*d.ID]
+			if !ok {
+				return model.Playlist{}, fmt.Errorf("desired item id %d not found in playlist %d", *d.ID, playlistID)
+			}
+			kept[*d.ID] = struct{}{}
+
+			// Only update if something changed
+			if cur.Position != targetPos || cur.Duration != d.Duration {
+				if _, err = tx.Exec(`
+					UPDATE playlist_items
+					   SET position = $2,
+					       duration = $3,
+					       updated_at = now()
+					 WHERE id = $1;`,
+					cur.ID, targetPos, d.Duration,
+				); err != nil {
+					return model.Playlist{}, err
+				}
+			}
+
+		case d.ContentID != nil:
+			// Insert new item for existing Content
+			if _, err = tx.Exec(`
+				INSERT INTO playlist_items (playlist_id, content_id, position, duration, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, now(), now());`,
+				playlistID, *d.ContentID, targetPos, d.Duration,
+			); err != nil {
+				return model.Playlist{}, err
+			}
+
+		case d.IntegrationURL != nil:
+			// Ensure a Content row exists for this integration URL
+			var contentID int
+			if err = tx.Get(&contentID, `SELECT id FROM content WHERE url=$1 LIMIT 1;`, *d.IntegrationURL); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					// Create content as type 'integration' (matches your CHECK constraint)
+					if err = tx.Get(&contentID, `
+						INSERT INTO content (name, type, url, created_by, created_at, updated_at)
+						VALUES ('integration', 'integration', $1, 0, now(), now())
+						RETURNING id;`, *d.IntegrationURL); err != nil {
+						return model.Playlist{}, err
+					}
+				} else {
+					return model.Playlist{}, err
+				}
+			}
+			if _, err = tx.Exec(`
+				INSERT INTO playlist_items (playlist_id, content_id, position, duration, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, now(), now());`,
+				playlistID, contentID, targetPos, d.Duration,
+			); err != nil {
+				return model.Playlist{}, err
+			}
+
+		default:
+			return model.Playlist{}, fmt.Errorf("desired item #%d missing ID/ContentID/IntegrationURL", i)
+		}
+	}
+
+	// Delete any remaining existing rows that were not kept and not re-specified
+	for _, it := range existing {
+		if _, ok := kept[it.ID]; ok {
+			continue
+		}
+		// If it wasn't referenced by ID and isn't present in desired list, delete it
+		if _, err = tx.Exec(`DELETE FROM playlist_items WHERE id = $1;`, it.ID); err != nil {
+			return model.Playlist{}, err
+		}
+	}
+
+	// Return full playlist (post-commit values will match)
+	var out model.Playlist
+	if err = tx.Get(&out, `
+		SELECT id, name, description, created_by, created_at, updated_at
+		  FROM playlists WHERE id = $1;`, playlistID); err != nil {
+		return model.Playlist{}, err
+	}
+	if err = tx.Select(&out.Items, `
+		SELECT id, playlist_id, content_id, position, duration, created_at
+		  FROM playlist_items
+		 WHERE playlist_id = $1
+		 ORDER BY position;`, playlistID); err != nil {
+		return model.Playlist{}, err
+	}
+	return out, nil
+}
+

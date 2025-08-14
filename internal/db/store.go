@@ -78,6 +78,8 @@ type Store interface {
 	GetPlaylistForScreen(screenID int) (model.Playlist, error)
 	GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error)
 	GetPlaylistContentForScreen(screenID int) (string, []ContentItem, error)
+	BulkUpdatePlaylist(playlistID int, name, description *string, desired []DesiredItem) (model.Playlist, error)
+
 
 	CreateSchedule(name string, createdBy int) (model.Schedule, error)
 	DeleteSchedule(scheduleID int) error
@@ -302,4 +304,6 @@ func (s *pgStore) GetEffectivePlaylistForScreen(screenID int, now time.Time) (mo
 func (s *pgStore) GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error) {
 	return GetPlaylistContentByPlaylistID(playlistID)
 }
-
+func (s *pgStore) BulkUpdatePlaylist(playlistID int, name, description *string, desired []DesiredItem) (model.Playlist, error) {
+	return BulkUpdatePlaylist(playlistID, name, description, desired)
+}

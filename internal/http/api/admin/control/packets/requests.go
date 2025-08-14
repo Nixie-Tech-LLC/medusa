@@ -121,3 +121,28 @@ type RenameScreenGroupRequest struct {
 type ModifyGroupMembershipRequest struct {
     ScreenID int `json:"screen_id" binding:"required"`
 }
+
+type BulkDesiredItem struct {
+	// Exactly one of: ID, ContentID, Integration
+	ID          *int                     `json:"id,omitempty"`
+	ContentID   *int                     `json:"content_id,omitempty"`
+	Integration *BulkIntegrationSpec     `json:"integration,omitempty"`
+	Duration    int                      `json:"duration"`
+}
+
+type BulkIntegrationSpec struct {
+	Name   string                 `json:"name"`
+	Config json.RawMessage        `json:"config"`
+}
+
+type BulkUpdatePlaylistRequest struct {
+	Name        *string            `json:"name,omitempty"`
+	Description *string            `json:"description,omitempty"`
+
+	DesiredItems []BulkDesiredItem `json:"desired_items"`
+}
+
+type BulkUpdatePlaylistResponse struct {
+	Playlist PlaylistResponse `json:"playlist"`
+}
+

@@ -41,6 +41,7 @@ func PlaylistModule(store db.Store) api.Module {
 		c.DELETE("/playlists/:id/items/:item_id", 	ctl.removeItem)
 		c.GET("/playlists/:id/items",		 		ctl.listItems)
 		c.PUT("/playlists/:id/items", 				ctl.reorderItems)
+		c.PUT("/playlists/:id/bulk", ctl.bulkUpdate)
 
 		c.POST("/playlists/:id/integrations", ctl.addIntegration)
 	})
@@ -341,9 +342,7 @@ func (p *PlaylistController) reorderItems(ctx *gin.Context, user *model.User) (a
 	}
 
 	go p.notifyScreensPlaylistUpdated(pid)
-	return p.listItems(ctx, user)
-}
-
+	return p.listItems(ctx, user) }
 func (p *PlaylistController) addIntegration(ctx *gin.Context, user *model.User) (any, *api.APIError) {
 	pid, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
@@ -446,5 +445,83 @@ func (p *PlaylistController) addIntegration(ctx *gin.Context, user *model.User) 
 
 	go p.notifyScreensPlaylistUpdated(pid)
 	return mapItem(item), nil
+}
+
+func (p *PlaylistController) bulkUpdate(ctx *gin.Context, user *model.User) (any, *api.APIError) {
+	pid, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid playlist id"}
+	}
+
+	// Authz
+	pl, err := p.store.GetPlaylistByID(pid)
+	if err != nil {
+		return nil, &api.APIError{Code: http.StatusNotFound, Message: "not found"}
+	}
+	if pl.CreatedBy != user.ID {
+		return nil, &api.APIError{Code: http.StatusForbidden, Message: "forbidden"}
+	}
+
+	var req packets.BulkUpdatePlaylistRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		return nil, &api.APIError{Code: http.StatusBadRequest, Message: err.Error()}
+	}
+	if len(req.DesiredItems) == 0 {
+		// Allow metadata-only updates, but warn if truly empty
+		log.Warn().Int("playlist_id", pid).Msg("[playlist] bulk update: no desired items provided")
+	}
+
+	// Build desired set for DB layer, resolving integrations to URLs first.
+	desired := make([]db.DesiredItem, 0, len(req.DesiredItems))
+	for i, di := range req.DesiredItems {
+		switch {
+		case di.ID != nil:
+			if di.Duration <= 0 {
+				return nil, &api.APIError{Code: 400, Message: fmt.Sprintf("desired_items[%d]: duration must be > 0", i)}
+			}
+			desired = append(desired, db.DesiredItem{
+				ID:        di.ID,
+				Duration:  di.Duration,
+			})
+
+		case di.ContentID != nil:
+			if di.Duration <= 0 {
+				return nil, &api.APIError{Code: 400, Message: fmt.Sprintf("desired_items[%d]: duration must be > 0", i)}
+			}
+			desired = append(desired, db.DesiredItem{
+				ContentID: di.ContentID,
+				Duration:  di.Duration,
+			})
+
+		case di.Integration != nil:
+			if di.Duration <= 0 {
+				return nil, &api.APIError{Code: 400, Message: fmt.Sprintf("desired_items[%d]: duration must be > 0", i)}
+			}
+			url, apiErr := utils.EnsureIntegrationURL(di.Integration.Name, di.Integration.Config)
+			if apiErr != nil {
+				return nil, apiErr
+			}
+			desired = append(desired, db.DesiredItem{
+				IntegrationURL: &url,
+				Duration:       di.Duration,
+			})
+
+		default:
+			return nil, &api.APIError{Code: 400, Message: fmt.Sprintf("desired_items[%d]: must include one of id, content_id, or integration", i)}
+		}
+	}
+
+	updated, err := p.store.BulkUpdatePlaylist(pid, req.Name, req.Description, desired)
+	if err != nil {
+		log.Error().Err(err).Int("playlist_id", pid).Msg("[playlist] bulk update failed")
+		return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "bulk update failed"}
+	}
+
+	// Invalidate ETag once for all affected screens
+	go p.notifyScreensPlaylistUpdated(pid)
+
+	return packets.BulkUpdatePlaylistResponse{
+		Playlist: mapPlaylist(updated),
+	}, nil
 }
 

@@ -32,3 +32,13 @@ func SetupAthan(config json.RawMessage) (string, *api.APIError) {
 	return url, nil
 }
 
+// EnsureIntegrationURL returns a canonical URL for a given integration request.
+// You already have SetupAthan(req.Config) used in addIntegration; we reuse that here.
+func EnsureIntegrationURL(name string, cfg json.RawMessage) (string, *api.APIError) {
+	switch name {
+	case "athan":
+		return SetupAthan(cfg) // existing function returns (url string, *api.APIError)
+	default:
+		return "", &api.APIError{Code: 400, Message: "unknown integration"}
+	}
+}
