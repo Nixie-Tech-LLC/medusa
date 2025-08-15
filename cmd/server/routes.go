@@ -1,22 +1,21 @@
 package main
 
 import (
+	"html/temp
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"html/template"
 
+	"github.com/Nixie-Tech-LLC/medusa/internal/db"
+	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
+	authapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/auth/endpoints"
+	adminapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/control/endpoints"
+	clientapi "github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
+	"github.com/Nixie-Tech-LLC/medusa/internal/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/Nixie-Tech-LLC/medusa/internal/db"
-	"github.com/Nixie-Tech-LLC/medusa/internal/storage"
-	"github.com/Nixie-Tech-LLC/medusa/internal/http/api"
-	adminapi 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/control/endpoints"
-	authapi  	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/admin/auth/endpoints"
-	clientapi 	"github.com/Nixie-Tech-LLC/medusa/internal/http/api/tv/endpoints"
 )
-
 
 // RegisterRoutes sets up all application routes
 func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSystem storage.Storage, tmpl *template.Template) {
@@ -25,23 +24,23 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 	r.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool { return true },
 		AllowMethods: []string{
-			"GET", 
-			"POST", 
-			"PUT", 
-			"PATCH", 
-			"DELETE", 
-			"OPTIONS", 
+			"GET",
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE",
+			"OPTIONS",
 			"HEAD",
 		},
 		AllowHeaders: []string{
-			"Origin", 
-			"Content-Type", 
-			"Authorization", 
-			"Accept", 
-			"If-None-Match", 
+			"Origin",
+			"Content-Type",
+			"Authorization",
+			"Accept",
+			"If-None-Match",
 			"X-If-None-Match",
 		},
-		ExposeHeaders:[]string{
+		ExposeHeaders: []string{
 			"Content-Length",
 			"ETag",
 			"X-Content-ETag",
@@ -52,7 +51,7 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 	api.MountGroup(r, api.GroupConfig{
 		Prefix: "/api/admin",
 		Auth:   false,
-	}, 
+	},
 		authapi.AuthPublicModule(env.SecretKey, store),
 	)
 
@@ -60,7 +59,7 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 		Prefix:    "/api/admin",
 		Auth:      true,
 		SecretKey: env.SecretKey,
-	}, 
+	},
 		// control modules
 		adminapi.ContentModule(store, storageSystem),
 		adminapi.ScreenModule(store),
@@ -68,11 +67,12 @@ func RegisterRoutes(r *gin.Engine, env Environment, store db.Store, storageSyste
 		// session endpoints that require auth
 		authapi.AuthSessionModule(env.SecretKey, store),
 		adminapi.ScheduleModule(store),
+		adminapi.ScreenGroupModule(store),
 	)
 
 	api.MountGroup(r, api.GroupConfig{
 		Prefix: "/api/tv",
-	}, 
+	},
 		clientapi.PairingModule(store),
 		clientapi.IntegrationsModule(),
 	)

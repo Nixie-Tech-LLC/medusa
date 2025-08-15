@@ -87,7 +87,7 @@ func (s *ScheduleController) deleteSchedule(ctx *gin.Context, user *model.User) 
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid id"}
 	}
 
-	owned, err := s.store.GetSchedule(id)
+	owned, err := s.store.GetScheduleByID(id)
 	if err != nil {
 		return nil, &api.APIError{Code: http.StatusNotFound, Message: "schedule not found"}
 	}
@@ -109,7 +109,7 @@ func (s *ScheduleController) assignScheduleToScreen(ctx *gin.Context, user *mode
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid schedule id"}
 	}
 
-	schedule, err := s.store.GetSchedule(scheduleID)
+	schedule, err := s.store.GetScheduleByID(scheduleID)
 	if err != nil || schedule.CreatedBy != user.ID {
 		return nil, &api.APIError{Code: http.StatusForbidden, Message: "forbidden"}
 	}
@@ -141,7 +141,7 @@ func (s *ScheduleController) unassignScheduleFromScreen(ctx *gin.Context, user *
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid schedule id"}
 	}
 
-	schedule, err := s.store.GetSchedule(scheduleID)
+	schedule, err := s.store.GetScheduleByID(scheduleID)
 	if err != nil || schedule.CreatedBy != user.ID {
 		return nil, &api.APIError{Code: http.StatusForbidden, Message: "forbidden"}
 	}
@@ -173,7 +173,7 @@ func (s *ScheduleController) createWindow(ctx *gin.Context, user *model.User) (a
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid schedule id"}
 	}
 
-	schedule, err := s.store.GetSchedule(scheduleID)
+	schedule, err := s.store.GetScheduleByID(scheduleID)
 	if err != nil {
 		return nil, &api.APIError{Code: http.StatusNotFound, Message: "schedule not found"}
 	}
@@ -239,7 +239,7 @@ func (s *ScheduleController) deleteWindow(ctx *gin.Context, user *model.User) (a
 			return nil, &api.APIError{Code: http.StatusBadRequest, Message: "occur_start required for scope=one"}
 		}
 		if err := s.store.DeleteScheduleWindowOneOccurrence(windowID, *request.OccurStart); err != nil {
-		 return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not delete occurrence"}
+			return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not delete occurrence"}
 		}
 	}
 
@@ -253,7 +253,7 @@ func (s *ScheduleController) listOccurrences(ctx *gin.Context, user *model.User)
 		return nil, &api.APIError{Code: http.StatusBadRequest, Message: "invalid schedule id"}
 	}
 
-	schedule, err := s.store.GetSchedule(scheduleID)
+	schedule, err := s.store.GetScheduleByID(scheduleID)
 	if err != nil {
 		return nil, &api.APIError{Code: http.StatusNotFound, Message: "schedule not found"}
 	}
@@ -276,4 +276,3 @@ func (s *ScheduleController) listOccurrences(ctx *gin.Context, user *model.User)
 
 	return occurrences, nil
 }
-

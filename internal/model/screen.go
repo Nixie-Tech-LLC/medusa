@@ -18,3 +18,12 @@ type Screen struct {
 	CreatedBy         int       `db:"created_by"   json:"created_by"`
 	UpdatedAt         time.Time `db:"updated_at"   json:"updated_at"`
 }
+
+type ScreenGroup struct {
+	ID          int       `db:"id"`
+	Name        string    `db:"name"`
+	Description *string   `db:"description"`
+	CreatedBy   int       `db:"created_by"`
+	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}

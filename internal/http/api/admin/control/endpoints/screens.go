@@ -34,6 +34,8 @@ func ScreenModule(store db.Store) api.Module {
 		c.POST("/screens", ctl.createScreen)
 		c.GET("/screens/:id", ctl.getScreen)
 		c.PUT("/screens/:id", ctl.updateScreen)
+		c.DELETE("/screens/:id", ctl.deleteScreen)
+
 		// screen <-> playlist
 		c.GET("/screens/:id/playlist", ctl.getPlaylistForScreen)
 		c.POST("/screens/:id/playlist", ctl.assignPlaylistToScreen)

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/rs/zerolog/log"
+	"time"
 
 	_ "github.com/lib/pq"
 
@@ -304,3 +305,68 @@ func GetScreensUsingPlaylist(playlistID int) ([]model.Screen, error) {
 	return screens, nil
 }
 
+// a direct get for content items in a playlist by its ID
+func GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error) {
+	var playlistName string
+	if err := DB.Get(&playlistName, `
+        SELECT p.name
+          FROM playlists p
+         WHERE p.id = $1;
+    `, playlistID); err != nil {
+		log.Error().Err(err).Int("playlist_id", playlistID).Msg("GetPlaylistContentByPlaylistID: name query failed")
+		return "", nil, err
+	}
+
+	var items []ContentItem
+	if err := DB.Select(&items, `
+        SELECT
+          c.url,
+          pi.duration,
+          COALESCE(NULLIF(c.type, ''), 'html') AS type
+        FROM playlist_items   pi
+        JOIN content          c  ON pi.content_id = c.id
+       WHERE pi.playlist_id = $1
+       ORDER BY pi.position;
+    `, playlistID); err != nil {
+		log.Error().Err(err).Int("playlist_id", playlistID).Msg("GetPlaylistContentByPlaylistID: items query failed")
+		return playlistName, nil, err
+	}
+
+	return playlistName, items, nil
+}
+
+// GetEffectivePlaylistForScreen tries:
+//  1. active schedule window at 'now' -> ("schedule")
+//  2. direct assignment via screen_playlists -> ("direct")
+//
+// Returns: (playlist, contentItems, source, error)
+func GetEffectivePlaylistForScreen(screenID int, now time.Time) (model.Playlist, []ContentItem, string, error) {
+	// SCHEDULE path
+	if pid, err := ResolvePlaylistForScreenAt(screenID, now); err == nil && pid != 0 {
+		pl, err := GetPlaylistByID(pid)
+		if err != nil {
+			return model.Playlist{}, nil, "", err
+		}
+		_, items, err := func() (string, []ContentItem, error) {
+			return GetPlaylistContentByPlaylistID(pid)
+		}()
+		if err != nil {
+			return model.Playlist{}, nil, "", err
+		}
+		return pl, items, "schedule", nil
+	}
+
+	// DIRECT path (fallback)
+	pl, err := GetPlaylistForScreen(screenID)
+	if err != nil {
+		// normalize to sql.ErrNoRows so callers can 404
+		return model.Playlist{}, nil, "", sql.ErrNoRows
+	}
+	name, items, err := GetPlaylistContentForScreen(screenID)
+	if err != nil {
+		return model.Playlist{}, nil, "", err
+	}
+	// keep Playlist.Name consistent with content name (in case of drift)
+	pl.Name = name
+	return pl, items, "direct", nil
+}

@@ -106,3 +106,17 @@ type ListOccurrencesQuery struct {
 	From time.Time `form:"from" binding:"required"`
 	To   time.Time `form:"to" binding:"required"`
 }
+
+type CreateScreenGroupRequest struct {
+	Name        string  `json:"name" binding:"required"`
+	Description *string `json:"description"`
+}
+
+type RenameScreenGroupRequest struct {
+	Name        *string `json:"name"`        // optional
+	Description *string `json:"description"` // optional
+}
+
+type ModifyGroupMembershipRequest struct {
+	ScreenID int `json:"screen_id" binding:"required"`
+}
