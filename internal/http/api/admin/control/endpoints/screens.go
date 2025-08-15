@@ -17,7 +17,6 @@ import (
 	"github.com/Nixie-Tech-LLC/medusa/internal/redis"
 )
 
-
 type TvController struct {
 	store db.Store
 }
@@ -31,19 +30,19 @@ func ScreenModule(store db.Store) api.Module {
 	ctl := newTvController(store)
 	return api.ModuleFunc(func(c *api.Controller) {
 		// CRUD
-		c.GET("/screens", 			ctl.listScreens)
-		c.POST("/screens", 			ctl.createScreen)
-		c.GET("/screens/:id", 		ctl.getScreen)
-		c.PUT("/screens/:id", 		ctl.updateScreen)
-		c.DELETE("/screens/:id",   ctl.deleteScreen)
+		c.GET("/screens", ctl.listScreens)
+		c.POST("/screens", ctl.createScreen)
+		c.GET("/screens/:id", ctl.getScreen)
+		c.PUT("/screens/:id", ctl.updateScreen)
+		c.DELETE("/screens/:id", ctl.deleteScreen)
 
 		// screen <-> playlist
-		c.GET("/screens/:id/playlist", 	ctl.getPlaylistForScreen)
+		c.GET("/screens/:id/playlist", ctl.getPlaylistForScreen)
 		c.POST("/screens/:id/playlist", ctl.assignPlaylistToScreen)
 
 		// pairing & assignment
-		c.POST("/screens/pair", 		ctl.pairScreen)
-		c.POST("/screens/:id/assign", 	ctl.assignScreenToUser)
+		c.POST("/screens/pair", ctl.pairScreen)
+		c.POST("/screens/:id/assign", ctl.assignScreenToUser)
 
 	})
 }
@@ -384,13 +383,13 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.AP
 	redis.Rdb.Set(ctx, key, updatedPairingData, 7*24*time.Hour)
 
 	// Assign the deviceID to the screen in database
-	if err := db.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
+	if err := t.store.AssignDeviceIDToScreen(request.ScreenID, &deviceID); err != nil {
 		log.Error().Err(err).Int("screen_id", request.ScreenID).Str("device_id", deviceID).
 			Str("route", ctx.FullPath()).Msg("failed to assign device ID to screen during pairing")
 		return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not update screen device ID"}
 	}
 
-	if err := db.PairScreen(request.ScreenID); err != nil {
+	if err := t.store.PairScreen(request.ScreenID); err != nil {
 		log.Error().Err(err).Int("screen_id", request.ScreenID).Str("route", ctx.FullPath()).
 			Msg("failed to mark screen as paired in database")
 		return nil, &api.APIError{Code: http.StatusInternalServerError, Message: "could not update screen"}
@@ -401,4 +400,3 @@ func (t *TvController) pairScreen(ctx *gin.Context, _ *model.User) (any, *api.AP
 
 	return gin.H{"success": "screen paired successfully"}, nil
 }
-

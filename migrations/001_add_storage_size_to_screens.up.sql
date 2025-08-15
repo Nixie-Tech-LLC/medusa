@@ -1,0 +1,3 @@
+ALTER TABLE screens
+    ADD COLUMN IF NOT EXISTS storage_size BIGINT,
+    ADD COLUMN IF NOT EXISTS ip_address TEXT;

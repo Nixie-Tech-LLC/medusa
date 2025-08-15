@@ -24,6 +24,7 @@ type Store interface {
 	// screen functions
 	CreateScreen(name string, location *string, createdBy int) (model.Screen, error)
 	UpdateScreen(id int, name, location *string) error
+	UpdateScreenIP(id int, ip *string) error
 	GetScreenByID(id int) (model.Screen, error)
 	DeleteScreen(id int) error
 
@@ -32,18 +33,20 @@ type Store interface {
 	AssignDeviceIDToScreen(screenID int, deviceID *string) error
 	UpdateClientInformation(screenID int, clientInformation *string) error
 	UpdateClientDimensions(screenID int, width, height int) error
-    // groups
-    CreateScreenGroup(userID int, name, description *string) (model.ScreenGroup, error)
-    RenameScreenGroup(userID, groupID int, newName, newDescription *string) (model.ScreenGroup, error)
-    DeleteScreenGroup(userID, groupID int) error
-    GetScreenGroupByID(groupID int) (model.ScreenGroup, error)
-    ListScreenGroups(userID int) ([]model.ScreenGroup, error)
+	UpdateClientStorageSize(screenID int, storageSize int64) error
+	PairScreen(screenID int) error
+	// groups
+	CreateScreenGroup(userID int, name, description *string) (model.ScreenGroup, error)
+	RenameScreenGroup(userID, groupID int, newName, newDescription *string) (model.ScreenGroup, error)
+	DeleteScreenGroup(userID, groupID int) error
+	GetScreenGroupByID(groupID int) (model.ScreenGroup, error)
+	ListScreenGroups(userID int) ([]model.ScreenGroup, error)
 
-    // membership
-    AddScreenToGroup(userID, groupID, screenID int) error
-    RemoveScreenFromGroup(userID, groupID, screenID int) error
-    ListScreensInGroup(userID, groupID int) ([]model.Screen, error)
-    ListGroupsForScreen(userID, screenID int) ([]model.ScreenGroup, error)
+	// membership
+	AddScreenToGroup(userID, groupID, screenID int) error
+	RemoveScreenFromGroup(userID, groupID, screenID int) error
+	ListScreensInGroup(userID, groupID int) ([]model.Screen, error)
+	ListGroupsForScreen(userID, screenID int) ([]model.ScreenGroup, error)
 	IsScreenPairedByDeviceID(deviceID *string) (bool, error)
 	GetScreenByDeviceID(deviceID *string) (model.Screen, error)
 
@@ -93,7 +96,7 @@ type Store interface {
 	ListScheduleOccurrences(scheduleID int, from, to time.Time) ([]model.ScheduleOccurrence, error)
 	GetScheduleByWindowID(windowID int) (model.Schedule, error)
 
-    ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error)
+	ResolvePlaylistForScreenAt(screenID int, at time.Time) (int, error)
 	GetEffectivePlaylistForScreen(screenID int, now time.Time) (model.Playlist, []ContentItem, string, error)
 	GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error)
 }
@@ -138,6 +141,9 @@ func (s *pgStore) CreateScreen(name string, location *string, createdBy int) (mo
 func (s *pgStore) UpdateScreen(id int, name, location *string) error {
 	return UpdateScreen(id, name, location)
 }
+func (s *pgStore) UpdateScreenIP(id int, ip *string) error {
+	return UpdateScreenIP(id, ip)
+}
 func (s *pgStore) DeleteScreen(id int) error {
 	return DeleteScreen(id)
 }
@@ -152,6 +158,12 @@ func (s *pgStore) UpdateClientInformation(screenID int, clientInformation *strin
 }
 func (s *pgStore) UpdateClientDimensions(screenID int, width, height int) error {
 	return UpdateClientDimensions(screenID, width, height)
+}
+func (s *pgStore) UpdateClientStorageSize(screenID int, storageSize int64) error {
+	return UpdateClientStorageSize(screenID, storageSize)
+}
+func (s *pgStore) PairScreen(screenID int) error {
+	return PairScreen(screenID)
 }
 func (s *pgStore) IsScreenPairedByDeviceID(deviceID *string) (bool, error) {
 	return IsScreenPairedByDeviceID(deviceID)
@@ -235,9 +247,11 @@ func (s *pgStore) GetPlaylistContentForScreen(screenID int) (string, []ContentIt
 func (s *pgStore) CreateSchedule(name string, createdBy int) (model.Schedule, error) {
 	return CreateSchedule(name, createdBy)
 }
-func (s *pgStore) DeleteSchedule(scheduleID int) error { return DeleteSchedule(scheduleID) }
+func (s *pgStore) DeleteSchedule(scheduleID int) error                 { return DeleteSchedule(scheduleID) }
 func (s *pgStore) ListSchedules(ownerID int) ([]model.Schedule, error) { return ListSchedules(ownerID) }
-func (s *pgStore) GetScheduleByID(scheduleID int) (model.Schedule, error) { return GetSchedule(scheduleID) }
+func (s *pgStore) GetScheduleByID(scheduleID int) (model.Schedule, error) {
+	return GetSchedule(scheduleID)
+}
 
 func (s *pgStore) AssignScheduleToScreen(scheduleID, screenID int) error {
 	return AssignScheduleToScreen(scheduleID, screenID)
@@ -281,7 +295,7 @@ func (s *pgStore) AddScreenToGroup(userID, groupID, screenID int) error {
 	return AddScreenToGroup(userID, groupID, screenID)
 }
 func (s *pgStore) RemoveScreenFromGroup(userID, groupID, screenID int) error {
-	return RemoveScreenFromGroup(userID, groupID, screenID) 
+	return RemoveScreenFromGroup(userID, groupID, screenID)
 }
 func (s *pgStore) ListScreensInGroup(userID, groupID int) ([]model.Screen, error) {
 	return ListScreensInGroup(userID, groupID)
@@ -302,4 +316,3 @@ func (s *pgStore) GetEffectivePlaylistForScreen(screenID int, now time.Time) (mo
 func (s *pgStore) GetPlaylistContentByPlaylistID(playlistID int) (string, []ContentItem, error) {
 	return GetPlaylistContentByPlaylistID(playlistID)
 }
-
