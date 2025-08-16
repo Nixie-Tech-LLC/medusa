@@ -303,7 +303,7 @@
           var now2 = new Date(); var diff = iq.getTime() - now2.getTime();
           var upcoming = diff>=0; diff = Math.abs(diff);
           var h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
-          countdownEl.textContent = upcoming ? ('Next Iqamah in ' + (h>0?(h+'h '):'') + m + 'm ' + String(s).padStart(2,'0') + 's') : 'Iqamah started';
+          countdownEl.textContent = upcoming ? ('Next Iqamah in ' + (h>0?(h+'h '):'') + m + 'm ' + String(s).padStart(2,'0') + 's') : '';
         }
         tick(); setInterval(tick, 1000);
       }
