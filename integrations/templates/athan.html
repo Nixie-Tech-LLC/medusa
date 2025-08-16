@@ -2,233 +2,178 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Prayer Times</title>
+  <title>Masjid Prayer Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
   <style>
+    /* TV-first (10-foot) styling */
     :root{
-      --bg:#f7f7f7;
-      --ink:#0a0a0a;
-      --muted:#6b7280;
-      --card:#ffffff;
-      --ring:#111111;
-      --accent:#0a0a0a;
-      --accent-ink:#ffffff;
-      --radius-xl:28px;
-      --radius-lg:18px;
-      --shadow:0 10px 30px rgba(0,0,0,.05);
+      /* High-contrast dark theme for TVs */
+      --bg:#06090f;            /* darker background */
+      --panel:#0b1118;         /* darker panels for contrast */
+      --border:rgba(255,255,255,0.18); /* slightly stronger borders */
+      --ink:#f5f8fc;           /* near-white text */
+      --muted:#a8bacb;         /* readable muted */
+      --accent:#25d0c0;        /* vivid teal highlight */
+      --accent-ink:#031016;
+      --radius:18px;
+
+      /* TV type scale: large minimums + vh scaling so 100% zoom still reads big */
+      --fs-xs:clamp(18px,1.8vh,28px);
+      --fs-sm:clamp(22px,2.2vh,34px);
+      --fs-md:clamp(28px,3.0vh,44px);
+      --fs-lg:clamp(40px,4.2vh,58px);
+      --fs-xl:clamp(96px,10.5vh,160px); /* main clock */
+      --gap:clamp(16px,2.6vh,32px);
+      --row-min-h:clamp(88px,10.5vh,180px);
+      --ticker-h:clamp(64px,7vh,110px);
+      --safe: max(env(safe-area-inset-left), 24px);
     }
 
     *{box-sizing:border-box}
     html,body{height:100%}
     body{
       margin:0;
-      background: radial-gradient(1200px 800px at 10% -10%, #ffffff 0%, #f1f1f1 45%, #ececec 100%);
+      background:var(--bg);
       color:var(--ink);
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+      font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      font-size:var(--fs-md); /* ensure baseline size is large */
+      -webkit-text-size-adjust:100%;
+      text-rendering:optimizeLegibility;
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
-      letter-spacing:.01em;
+      overflow:hidden; /* prevent scroll on TVs */
     }
 
-    .shell{
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 32px 24px;
-      height: 100%;
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      gap: 20px;
+    .board{
+      display:grid;grid-template-columns:1.7fr 1fr;gap:var(--gap);
+      padding:calc(var(--gap) + var(--safe));
+      height:100%;
     }
 
-    .top{
-      display:flex;align-items:center;justify-content:space-between;gap:16px;
+    .left{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:var(--gap);
+      display:grid;grid-template-rows:auto 1fr;
     }
-    .brand{
-      font-weight:900;font-size:18px;letter-spacing:.08em;text-transform:uppercase;
-      background:#111;color:#fff;padding:10px 14px;border-radius:999px;
+    .left .hdr{
+      display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;
+      color:var(--muted);
+      font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+      font-size:var(--fs-sm);
+      padding:calc(var(--gap)/2) var(--gap);
+      border-bottom:1px solid var(--border)
     }
+    .rows{display:flex;flex-direction:column;gap:calc(var(--gap)/1.6);padding-top:calc(var(--gap)/1.6)}
 
-    .meta{
-      display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;
-      padding:14px 16px;background:var(--card);border-radius:var(--radius-lg);box-shadow:var(--shadow);
-      border:1px solid #ececec;
+    .trow{
+      display:grid;grid-template-columns:1.1fr 0.9fr 0.9fr;align-items:center;
+      padding:calc(var(--gap)/1.4) var(--gap);
+      border-radius:14px;border:1px solid var(--border);
+      background:rgba(255,255,255,0.02);
+      min-height:var(--row-min-h);
     }
-    .city{font-weight:900;font-size:26px;line-height:1}
-    .date{font-weight:600;color:var(--muted);font-size:16px}
+    .trow .pname{font-weight:900;letter-spacing:.02em;font-size:var(--fs-lg)}
+    .trow .start-time,.trow .iq-time{font-weight:900;font-size:var(--fs-lg);justify-self:end}
+    .trow.active{background:linear-gradient(180deg, rgba(37,208,192,0.25), rgba(37,208,192,0.10));border-color:var(--accent);}
+    .trow.active .pname,.trow.active .start-time,.trow.active .iq-time{color:#cffffb;text-shadow:0 1px 0 rgba(255,255,255,0.35)}
 
-    /* Two-column layout: left list, right spotlight */
-    .layout{
-      display:grid;
-      grid-template-columns: 420px 1fr;
-      gap: 24px;
-      min-height: 0;
-    }
-    @media (max-width: 980px){
-      .layout{ grid-template-columns: 1fr; }
-    }
+    .right{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--gap);display:grid;grid-template-rows:auto auto 1fr auto;gap:var(--gap)}
+    .r-top{display:flex;justify-content:space-between;align-items:flex-start}
+    .r-top .datecity{font-weight:900;font-size:var(--fs-md)}
+    .r-top .date{font-size:var(--fs-sm);color:var(--muted);margin-top:6px}
 
-    /* Left column: vertical rows */
-    .list{
-      background:var(--card);
-      border:1px solid #ececec;
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      padding: 12px;
-      display:flex;
-      flex-direction:column;
-      gap:12px;
-      overflow: auto;
-      max-height: calc(100vh - 200px);
-    }
+    .sunrow{display:flex;gap:var(--gap);color:var(--muted);font-size:var(--fs-sm)}
+    .sunrow .card{border:1px solid var(--border);border-radius:12px;padding:calc(var(--gap)/1.6) var(--gap);background:rgba(255,255,255,0.02)}
+    .sunrow .title{font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+    .sunrow .time{font-size:var(--fs-md);color:var(--ink);font-weight:900;margin-top:6px}
 
-    .row{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      padding: 14px 16px;
-      border: 1px solid #eee;
-      border-radius: 16px;
-      transition: border-color .2s ease, background .2s ease;
-      background: #fff;
-    }
-    .row:hover{ border-color: var(--ring); }
+    .clock{display:grid;justify-items:center;border:1px solid var(--border);border-radius:14px;padding:calc(var(--gap)/1.2) var(--gap);background:rgba(255,255,255,0.02)}
+    #clock-main{font-weight:900;font-size:var(--fs-xl);line-height:1;letter-spacing:.02em}
+    #clock-ampm{color:var(--muted);font-weight:800;margin-top:6px;font-size:var(--fs-sm)}
 
-    .row-main{
-      display:flex;align-items:baseline;gap:14px;min-width:0;
-    }
-    .name{
-      font-weight:800;letter-spacing:.08em;font-size:12px;color:var(--muted);text-transform:uppercase;
-      white-space:nowrap;
-    }
-    .time{
-      display:flex;align-items:baseline;gap:8px;line-height:1;
-    }
-    .time-main{
-      font-family:"Space Grotesk", Inter, ui-sans-serif;
-      font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;
-    }
-    .time-ampm{font-weight:700;font-size:12px;color:var(--muted);margin-top:6px}
+    .next{border:1px solid var(--border);border-radius:14px;padding:var(--gap);background:rgba(255,255,255,0.02)}
+    .next .label{color:var(--muted);text-transform:uppercase;font-weight:800;letter-spacing:.08em;font-size:var(--fs-sm)}
+    .next .nname{font-weight:900;margin-top:8px;font-size:var(--fs-md)}
+    .next .times{display:flex;gap:12px;align-items:baseline;color:var(--muted);font-size:var(--fs-sm)}
+    .next .times .v{color:var(--ink);font-weight:900;font-size:var(--fs-md)}
+    #countdown{margin-top:10px;color:var(--accent);font-weight:900;font-size:var(--fs-lg)}
 
-    .iqama-pill{
-      background:var(--accent);color:var(--accent-ink);border-radius:999px;
-      padding:6px 10px;font-weight:800;letter-spacing:.08em;font-size:11px;display:inline-flex;gap:8px;align-items:center;
-      white-space:nowrap;
-    }
-    .iq-time{
-      font-family:"Space Grotesk", Inter, ui-sans-serif;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;
-    }
+    .tickerbar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--border);padding:0 var(--gap);height:var(--ticker-h);display:flex;align-items:center;font-weight:900;font-size:var(--fs-lg)}
 
-    /* Active (next) row highlight */
-    .row.active{
-      background:#0a0a0a;
-      border-color:#0a0a0a;
-      color:#fff;
-    }
-    .row.active .name,
-    .row.active .time-ampm{ color:#d1d5db; }
-    .row.active .iqama-pill{ background:#fff; color:#000; }
+    .footer-note{position:fixed;left:var(--gap);bottom:calc(4px + var(--ticker-h));color:var(--muted);font-size:var(--fs-sm)}
 
-    /* Right column: big spotlight */
-    .spotlight{
-      background:var(--card);
-      border:1px solid #ececec;
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      padding: clamp(20px, 4vw, 36px);
-      display:flex;
-      flex-direction:column;
-      gap: clamp(16px, 3vh, 28px);
-      min-height: 420px;
-    }
-    .spot-title{
-      font-weight:900;letter-spacing:.06em;text-transform:uppercase;font-size:14px;color:var(--muted);
-    }
-    .spot-name{
-      font-weight:900;font-size:clamp(28px, 4vw, 44px);letter-spacing:.01em;line-height:1;
-    }
-    .spot-times{
-      display:flex;flex-wrap:wrap;gap:18px;align-items:center;
-    }
-    .big-time{
-      display:flex;align-items:baseline;gap:12px;
-      padding:14px 18px;border:1px solid #eee;border-radius:16px;background:#fff;
-    }
-    .label{
-      font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;
-    }
-    .bt-main{
-      font-family:"Space Grotesk", Inter, ui-sans-serif;
-      font-weight:700;font-size: clamp(34px, 5vw, 60px);line-height:1;font-variant-numeric:tabular-nums;
-    }
-    .bt-ampm{font-weight:700;font-size:14px;color:var(--muted);margin-top:10px}
-
-    .countdown{
-      margin-top:auto;
-      font-weight:700;color:var(--muted);font-size:14px;
+    /* Accessibility: reduce motion if user prefers */
+    @media (prefers-reduced-motion: reduce){
+      *{animation:none !important;transition:none !important}
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="top">
-      <div class="brand">PRAYER</div>
-    </div>
-
-    <section class="meta">
-      <div class="city">{{ .City }}</div>
-      <div class="date">{{ .Date }}</div>
-    </section>
-
-    <section class="layout">
-      <!-- LEFT: vertical prayer rows -->
-      <div class="list" id="prayer-list">
-        {{range $i, $pr := .Prayers}}
-        <div class="row" data-name="{{$pr.Name}}" data-athan="{{$pr.Time}} {{$pr.Period}}">
-          <div class="row-main">
-            <div class="name">{{$pr.Name}}</div>
-            <div class="time">
-              <div class="time-main">{{$pr.Time}}</div>
-              <div class="time-ampm">{{$pr.Period}}</div>
-            </div>
-          </div>
-          <div class="iqama-pill">
-            <span>IQAMA</span>
-            <span class="iq-time">--:--</span>
-          </div>
+  <div class="board">
+    <div class="left">
+      <div class="hdr">
+        <div>Salah</div>
+        <div style="text-align:right">Starts</div>
+        <div style="text-align:right">Iqamah</div>
+      </div>
+      <div class="rows">
+        {{range .Prayers}}
+        <div class="trow" data-name="{{.Name}}" data-athan="{{.Time}} {{.Period}}">
+          <div class="pname">{{.Name}}</div>
+          <div class="start-time">{{.Time}} {{.Period}}</div>
+          <div class="iq-time"></div>
         </div>
         {{end}}
       </div>
+    </div>
 
-      <!-- RIGHT: next prayer spotlight -->
-      <div class="spotlight" id="spotlight">
-        <div class="spot-title">Next Prayer</div>
-        <div class="spot-name" id="spot-name">—</div>
-
-        <div class="spot-times">
-          <div class="big-time" aria-label="Athan">
-            <div class="label">Athan</div>
-            <div class="bt-main" id="spot-athan">--:--</div>
-            <div class="bt-ampm" id="spot-athan-ampm">—</div>
+    <div class="right">
+      <div class="r-top">
+        <div class="datecity">
+          <div class="city">{{.City}}</div>
+          <div class="date">{{.Date}}</div>
+        </div>
+        <div class="sunrow">
+          <div class="card">
+            <div class="title">Sunrise</div>
+            <div class="time">—</div>
           </div>
-
-          <div class="big-time" aria-label="Iqama">
-            <div class="label">Iqama</div>
-            <div class="bt-main" id="spot-iqama">--:--</div>
-            <div class="bt-ampm" id="spot-iqama-ampm">—</div>
+          <div class="card">
+            <div class="title">Ishraq</div>
+            <div class="time">—</div>
           </div>
         </div>
-
-        <div class="countdown" id="countdown" aria-live="polite"></div>
       </div>
-    </section>
+
+      <div class="clock">
+        <div id="clock-main">--:--</div>
+        <div id="clock-ampm"></div>
+      </div>
+
+      <div class="next">
+        <div class="label">Next Iqamah In</div>
+        <div id="countdown">--:--</div>
+        <div class="nname" id="spot-name">—</div>
+        <div class="times">
+          <div>Athan</div>
+          <div class="v" id="spot-athan">--:--</div>
+          <div class="v" id="spot-athan-ampm"></div>
+          <div style="margin-left:16px">Iqamah</div>
+          <div class="v" id="spot-iqama">--:--</div>
+          <div class="v" id="spot-iqama-ampm"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <div class="tickerbar" id="ticker" style="display:none"></div>
+
   <script>
-    // --- Utilities ---
+    // ---------- Utilities ----------
     function parseTime12hToDate(timeStr){
-      // "h:mm AM" -> Date today
       const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
       if(!m) return null;
       let h = parseInt(m[1],10), min = parseInt(m[2],10);
@@ -247,71 +192,59 @@
     }
     const addMinutes = (d, mins) => new Date(d.getTime() + mins*60000);
 
-    // --- Populate iqama (Athan + 5) and compute next prayer ---
-    const rows = Array.from(document.querySelectorAll(".row"));
-    const now = new Date();
-
-    // Fill iqama times
+    // ---------- Populate Iqamah (Athan + 5) ----------
+    const rows = Array.from(document.querySelectorAll('.trow'));
     rows.forEach(row=>{
-      const athanStr = row.getAttribute("data-athan");
+      const athanStr = row.getAttribute('data-athan');
       const d = parseTime12hToDate(athanStr);
       const iq = d ? addMinutes(d, 5) : null;
-      const iqEl = row.querySelector(".iq-time");
-      if (iq && iqEl) {
-        const f = formatTime12h(iq);
-        iqEl.textContent = `${f.main} ${f.ampm}`;
-      }
+      const iqEl = row.querySelector('.iq-time');
+      if(iq && iqEl){ const f = formatTime12h(iq); iqEl.textContent = `${f.main} ${f.ampm}`; }
     });
 
-    // Determine next upcoming prayer (if all passed, wrap to first tomorrow)
+    // ---------- Live clock ----------
+    function updateClock(){ const now = new Date(); const f = formatTime12h(now); document.getElementById('clock-main').textContent = f.main; document.getElementById('clock-ampm').textContent = f.ampm; }
+    updateClock(); setInterval(updateClock, 1000);
+
+    // ---------- Next prayer + countdown ----------
     function getNextPrayer(){
-      const items = rows.map(r=>{
-        const name = r.getAttribute("data-name");
-        const d = parseTime12hToDate(r.getAttribute("data-athan"));
-        return {row:r, name, athan:d};
-      }).filter(x=>x.athan);
-
-      items.sort((a,b)=>a.athan - b.athan);
-
-      const afterNow = items.find(x=> x.athan > now);
-      return afterNow || (
-        items.length
-          ? { ...items[0], athan: addMinutes(items[0].athan, 24*60) } // tomorrow’s first
-          : null
-      );
+      const items = rows.map(r=>({
+        row:r,
+        name:r.getAttribute('data-name') || r.querySelector('.pname')?.textContent?.trim() || '',
+        athan:parseTime12hToDate(r.getAttribute('data-athan'))
+      })).filter(x=>x.athan).sort((a,b)=>a.athan-b.athan);
+      const now = new Date();
+      const afterNow = items.find(x=>x.athan>now);
+      if(afterNow) return afterNow;
+      return items.length ? { ...items[0], athan:addMinutes(items[0].athan, 24*60) } : null;
     }
 
     const next = getNextPrayer();
-    if (next){
-      // Left list highlight
-      rows.forEach(r=> r.classList.remove("active"));
-      next.row.classList.add("active");
+    if(next){
+      rows.forEach(r=>r.classList.remove('active'));
+      next.row.classList.add('active');
 
-      // Spotlight content
-      const iq = addMinutes(parseTime12hToDate(next.row.getAttribute("data-athan")), 5);
-      const fA = formatTime12h(parseTime12hToDate(next.row.getAttribute("data-athan")));
+      const iq = addMinutes(parseTime12hToDate(next.row.getAttribute('data-athan')), 5);
+      const fA = formatTime12h(parseTime12hToDate(next.row.getAttribute('data-athan')));
       const fI = formatTime12h(iq);
+      document.getElementById('spot-name').textContent = next.name;
+      document.getElementById('spot-athan').textContent = fA.main;
+      document.getElementById('spot-athan-ampm').textContent = fA.ampm;
+      document.getElementById('spot-iqama').textContent = fI.main;
+      document.getElementById('spot-iqama-ampm').textContent = fI.ampm;
 
-      document.getElementById("spot-name").textContent = next.name;
-      document.getElementById("spot-athan").textContent = fA.main;
-      document.getElementById("spot-athan-ampm").textContent = fA.ampm;
-      document.getElementById("spot-iqama").textContent = fI.main;
-      document.getElementById("spot-iqama-ampm").textContent = fI.ampm;
-
-      // Optional: tiny countdown to Athan
-      const countdownEl = document.getElementById("countdown");
+      const countdownEl = document.getElementById('countdown');
       function tick(){
-        const now2 = new Date();
-        let diff = parseTime12hToDate(next.row.getAttribute("data-athan")).getTime() - now2.getTime();
-        if (diff < 0) diff = 0;
-        const mins = Math.floor(diff/60000);
-        const secs = Math.floor((diff%60000)/1000);
-        countdownEl.textContent = diff>0 ? `Athan in ${mins}m ${String(secs).padStart(2,'0')}s` : `Athan time`;
+        const now2 = new Date(); let diff = iq.getTime() - now2.getTime();
+        const upcoming = diff>=0; diff = Math.abs(diff);
+        const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+        countdownEl.textContent = upcoming ? `Next Iqamah in ${h>0?h+'h ':''}${m}m ${String(s).padStart(2,'0')}s` : '';
       }
-      tick();
-      setInterval(tick, 1000);
+      tick(); setInterval(tick, 1000);
     }
+
+    // ---------- Optional ticker ----------
+    const ticker=document.getElementById('ticker'); const msg=''; if(msg){ticker.textContent=msg; ticker.style.display='block';}
   </script>
 </body>
 </html>
-
