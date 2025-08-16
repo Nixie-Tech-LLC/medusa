@@ -15,7 +15,6 @@
       --ink:#f5f8fc;           /* near-white text */
       --muted:#a8bacb;         /* readable muted */
       --accent:#25d0c0;        /* vivid teal highlight */
-      --accent-ink:#031016;
       --radius:18px;
 
       /* TV type scale: large minimums + vh scaling so 100% zoom still reads big */
@@ -42,13 +41,19 @@
       text-rendering:optimizeLegibility;
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
-      overflow:hidden; /* prevent scroll on TVs */
+      overflow:hidden; /* prevent scroll on TVs/mobile */
     }
+
+    /* Fit container and fixed-size canvas that we scale */
+    #fit-root{width:100vw;height:100vh;overflow:hidden;background:var(--bg);display:flex;justify-content:flex-start;align-items:flex-start}
+    #canvas{position:relative;width:100%;}
 
     .board{
       display:grid;grid-template-columns:1.7fr 1fr;gap:var(--gap);
       padding:calc(var(--gap) + var(--safe));
-      height:100%;
+      height:calc(100% - var(--ticker-h));
+      width:100%;
+      box-sizing:border-box;
     }
 
     .left{
@@ -101,9 +106,7 @@
     .next .times .v{color:var(--ink);font-weight:900;font-size:var(--fs-md)}
     #countdown{margin-top:10px;color:var(--accent);font-weight:900;font-size:var(--fs-lg)}
 
-    .tickerbar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--border);padding:0 var(--gap);height:var(--ticker-h);display:flex;align-items:center;font-weight:900;font-size:var(--fs-lg)}
-
-    .footer-note{position:fixed;left:var(--gap);bottom:calc(4px + var(--ticker-h));color:var(--muted);font-size:var(--fs-sm)}
+    .tickerbar{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--border);padding:0 var(--gap);height:var(--ticker-h);display:flex;align-items:center;font-weight:900;font-size:var(--fs-lg)}
 
     /* Accessibility: reduce motion if user prefers */
     @media (prefers-reduced-motion: reduce){
@@ -112,139 +115,164 @@
   </style>
 </head>
 <body>
-  <div class="board">
-    <div class="left">
-      <div class="hdr">
-        <div>Salah</div>
-        <div style="text-align:right">Starts</div>
-        <div style="text-align:right">Iqamah</div>
-      </div>
-      <div class="rows">
-        {{range .Prayers}}
-        <div class="trow" data-name="{{.Name}}" data-athan="{{.Time}} {{.Period}}">
-          <div class="pname">{{.Name}}</div>
-          <div class="start-time">{{.Time}} {{.Period}}</div>
-          <div class="iq-time"></div>
-        </div>
-        {{end}}
-      </div>
-    </div>
-
-    <div class="right">
-      <div class="r-top">
-        <div class="datecity">
-          <div class="city">{{.City}}</div>
-          <div class="date">{{.Date}}</div>
-        </div>
-        <div class="sunrow">
-          <div class="card">
-            <div class="title">Sunrise</div>
-            <div class="time">—</div>
+  <div id="fit-root">
+    <div id="canvas">
+      <div class="board">
+        <div class="left">
+          <div class="hdr">
+            <div>Salah</div>
+            <div style="text-align:right">Starts</div>
+            <div style="text-align:right">Iqamah</div>
           </div>
-          <div class="card">
-            <div class="title">Ishraq</div>
-            <div class="time">—</div>
+          <div class="rows">
+            {{range .Prayers}}
+            <div class="trow" data-name="{{.Name}}" data-athan="{{.Time}} {{.Period}}">
+              <div class="pname">{{.Name}}</div>
+              <div class="start-time">{{.Time}} {{.Period}}</div>
+              <div class="iq-time"></div>
+            </div>
+            {{end}}
           </div>
         </div>
-      </div>
 
-      <div class="clock">
-        <div id="clock-main">--:--</div>
-        <div id="clock-ampm"></div>
-      </div>
+        <div class="right">
+          <div class="r-top">
+            <div class="datecity">
+              <div class="city">{{.City}}</div>
+              <div class="date">{{.Date}}</div>
+            </div>
+            <div class="sunrow">
+              <div class="card">
+                <div class="title">Sunrise</div>
+                <div class="time">—</div>
+              </div>
+              <div class="card">
+                <div class="title">Ishraq</div>
+                <div class="time">—</div>
+              </div>
+            </div>
+          </div>
 
-      <div class="next">
-        <div class="label">Next Iqamah In</div>
-        <div id="countdown">--:--</div>
-        <div class="nname" id="spot-name">—</div>
-        <div class="times">
-          <div>Athan</div>
-          <div class="v" id="spot-athan">--:--</div>
-          <div class="v" id="spot-athan-ampm"></div>
-          <div style="margin-left:16px">Iqamah</div>
-          <div class="v" id="spot-iqama">--:--</div>
-          <div class="v" id="spot-iqama-ampm"></div>
+          <div class="clock">
+            <div id="clock-main">--:--</div>
+            <div id="clock-ampm"></div>
+          </div>
+
+          <div class="next">
+            <div class="label">Next Iqamah In</div>
+            <div id="countdown">--:--</div>
+            <div class="nname" id="spot-name">—</div>
+            <div class="times">
+              <div>Athan</div>
+              <div class="v" id="spot-athan">--:--</div>
+              <div class="v" id="spot-athan-ampm"></div>
+              <div style="margin-left:16px">Iqamah</div>
+              <div class="v" id="spot-iqama">--:--</div>
+              <div class="v" id="spot-iqama-ampm"></div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div class="tickerbar" id="ticker" style="display:none"></div>
     </div>
   </div>
 
-  <div class="tickerbar" id="ticker" style="display:none"></div>
-
   <script>
+    // Fit-to-viewport scaling: keep 1920x1080 canvas fully in view
+    (function(){
+      var canvas = document.getElementById('canvas');
+      var fitRoot = document.getElementById('fit-root');
+      function fit(){
+        if(!canvas || !fitRoot) return;
+        var baseW = 1920, baseH = 1080;
+        // Compute scale to fill width
+        var scale = fitRoot.clientWidth / baseW;
+        // Make the canvas element itself occupy the full width so there is no empty space in layout
+        canvas.style.width = fitRoot.clientWidth + 'px';
+        canvas.style.height = Math.round(baseH * scale) + 'px';
+        // Render at 1:1 since we resized the element; no transform needed
+        canvas.style.transform = 'none';
+      }
+      window.addEventListener('resize', fit);
+      document.addEventListener('DOMContentLoaded', fit);
+      fit();
+    })();
+
     // ---------- Utilities ----------
     function parseTime12hToDate(timeStr){
-      const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      var m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
       if(!m) return null;
-      let h = parseInt(m[1],10), min = parseInt(m[2],10);
-      const ap = m[3].toUpperCase();
+      var h = parseInt(m[1],10), min = parseInt(m[2],10);
+      var ap = m[3].toUpperCase();
       if(ap==="PM" && h!==12) h+=12;
       if(ap==="AM" && h===12) h=0;
-      const d = new Date();
+      var d = new Date();
       d.setHours(h, min, 0, 0);
       return d;
     }
     function formatTime12h(d){
-      let h = d.getHours(), m = d.getMinutes();
-      const ap = h>=12 ? "PM" : "AM";
+      var h = d.getHours(), m = d.getMinutes();
+      var ap = h>=12 ? 'PM' : 'AM';
       h = h%12 || 12;
-      return { main: `${h}:${String(m).padStart(2,"0")}`, ampm: ap };
+      return { main: (h+':' + String(m).padStart(2,'0')), ampm: ap };
     }
-    const addMinutes = (d, mins) => new Date(d.getTime() + mins*60000);
+    function addMinutes(d, mins){ return new Date(d.getTime() + mins*60000); }
 
-    // ---------- Populate Iqamah (Athan + 5) ----------
-    const rows = Array.from(document.querySelectorAll('.trow'));
-    rows.forEach(row=>{
-      const athanStr = row.getAttribute('data-athan');
-      const d = parseTime12hToDate(athanStr);
-      const iq = d ? addMinutes(d, 5) : null;
-      const iqEl = row.querySelector('.iq-time');
-      if(iq && iqEl){ const f = formatTime12h(iq); iqEl.textContent = `${f.main} ${f.ampm}`; }
-    });
+    document.addEventListener('DOMContentLoaded', function(){
+      var rows = Array.from(document.querySelectorAll('.trow'));
+      // Populate Iqamah (Athan + 5)
+      rows.forEach(function(row){
+        var athanStr = row.getAttribute('data-athan');
+        var d = parseTime12hToDate(athanStr);
+        var iq = d ? addMinutes(d, 5) : null;
+        var iqEl = row.querySelector('.iq-time');
+        if(iq && iqEl){ var f = formatTime12h(iq); iqEl.textContent = f.main + ' ' + f.ampm; }
+      });
 
-    // ---------- Live clock ----------
-    function updateClock(){ const now = new Date(); const f = formatTime12h(now); document.getElementById('clock-main').textContent = f.main; document.getElementById('clock-ampm').textContent = f.ampm; }
-    updateClock(); setInterval(updateClock, 1000);
+      // Live clock
+      function updateClock(){ var now = new Date(); var f = formatTime12h(now); document.getElementById('clock-main').textContent = f.main; document.getElementById('clock-ampm').textContent = f.ampm; }
+      updateClock(); setInterval(updateClock, 1000);
 
-    // ---------- Next prayer + countdown ----------
-    function getNextPrayer(){
-      const items = rows.map(r=>({
-        row:r,
-        name:r.getAttribute('data-name') || r.querySelector('.pname')?.textContent?.trim() || '',
-        athan:parseTime12hToDate(r.getAttribute('data-athan'))
-      })).filter(x=>x.athan).sort((a,b)=>a.athan-b.athan);
-      const now = new Date();
-      const afterNow = items.find(x=>x.athan>now);
-      if(afterNow) return afterNow;
-      return items.length ? { ...items[0], athan:addMinutes(items[0].athan, 24*60) } : null;
-    }
-
-    const next = getNextPrayer();
-    if(next){
-      rows.forEach(r=>r.classList.remove('active'));
-      next.row.classList.add('active');
-
-      const iq = addMinutes(parseTime12hToDate(next.row.getAttribute('data-athan')), 5);
-      const fA = formatTime12h(parseTime12hToDate(next.row.getAttribute('data-athan')));
-      const fI = formatTime12h(iq);
-      document.getElementById('spot-name').textContent = next.name;
-      document.getElementById('spot-athan').textContent = fA.main;
-      document.getElementById('spot-athan-ampm').textContent = fA.ampm;
-      document.getElementById('spot-iqama').textContent = fI.main;
-      document.getElementById('spot-iqama-ampm').textContent = fI.ampm;
-
-      const countdownEl = document.getElementById('countdown');
-      function tick(){
-        const now2 = new Date(); let diff = iq.getTime() - now2.getTime();
-        const upcoming = diff>=0; diff = Math.abs(diff);
-        const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
-        countdownEl.textContent = upcoming ? `Next Iqamah in ${h>0?h+'h ':''}${m}m ${String(s).padStart(2,'0')}s` : '';
+      // Next prayer + countdown
+      function getNextPrayer(){
+        var items = rows.map(function(r){
+          return { row:r, name:r.getAttribute('data-name'), athan:parseTime12hToDate(r.getAttribute('data-athan')) };
+        }).filter(function(x){ return !!x.athan; }).sort(function(a,b){ return a.athan-b.athan; });
+        var now = new Date();
+        var afterNow = items.find(function(x){ return x.athan > now; });
+        if(afterNow) return afterNow;
+        return items.length ? { row: items[0].row, name: items[0].name, athan: addMinutes(items[0].athan, 24*60) } : null;
       }
-      tick(); setInterval(tick, 1000);
-    }
 
-    // ---------- Optional ticker ----------
-    const ticker=document.getElementById('ticker'); const msg=''; if(msg){ticker.textContent=msg; ticker.style.display='block';}
+      var next = getNextPrayer();
+      if(next){
+        rows.forEach(function(r){ r.classList.remove('active'); });
+        next.row.classList.add('active');
+
+        var base = parseTime12hToDate(next.row.getAttribute('data-athan'));
+        var iq = addMinutes(base, 5);
+        var fA = formatTime12h(base);
+        var fI = formatTime12h(iq);
+        document.getElementById('spot-name').textContent = next.name;
+        document.getElementById('spot-athan').textContent = fA.main;
+        document.getElementById('spot-athan-ampm').textContent = fA.ampm;
+        document.getElementById('spot-iqama').textContent = fI.main;
+        document.getElementById('spot-iqama-ampm').textContent = fI.ampm;
+
+        var countdownEl = document.getElementById('countdown');
+        function tick(){
+          var now2 = new Date(); var diff = iq.getTime() - now2.getTime();
+          var upcoming = diff>=0; diff = Math.abs(diff);
+          var h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+          countdownEl.textContent = upcoming ? ('Next Iqamah in ' + (h>0?(h+'h '):'') + m + 'm ' + String(s).padStart(2,'0') + 's') : 'Iqamah started';
+        }
+        tick(); setInterval(tick, 1000);
+      }
+
+      // Optional ticker example: set message to show
+      var ticker=document.getElementById('ticker'); var msg=''; if(msg){ticker.textContent=msg; ticker.style.display='flex';}
+    });
   </script>
 </body>
 </html>
